@@ -152,6 +152,10 @@ impl PublicKey {
             .map_err(|e| DecodingError::failed_to_parse("Sr25519 public key", ByteArrayError(e)))?;
         Ok(PublicKey(pk))
     }
+
+    pub(crate) fn inner(&self) -> &RistrettoPublicKey {
+        &self.0
+    }
 }
 
 impl From<RistrettoPublicKey> for PublicKey {
