@@ -1073,12 +1073,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "795bc6e66a8e340f075fcf6227e417a2dc976b92b91f3cdc778bb858778b6747"
 
 [[package]]
-name = "convert_case"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
-
-[[package]]
 name = "core-foundation"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1281,9 +1275,12 @@ dependencies = [
  "cpufeatures",
  "curve25519-dalek-derive",
  "digest 0.10.7",
- "fiat-crypto 0.2.1",
+ "fiat-crypto",
+ "group",
  "platforms",
+ "rand_core 0.6.4",
  "rustc_version",
+ "serde",
  "subtle",
  "zeroize",
 ]
@@ -1376,30 +1373,6 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "rusticata-macros",
-]
-
-[[package]]
-name = "derivative"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "derive_more"
-version = "0.99.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
-dependencies = [
- "convert_case",
- "proc-macro2",
- "quote",
- "rustc_version",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -1655,12 +1628,6 @@ dependencies = [
  "rand_core 0.6.4",
  "subtle",
 ]
-
-[[package]]
-name = "fiat-crypto"
-version = "0.1.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e825f6987101665dea6ec934c09ec6d721de7bc1bf92248e1d5810c8cd636b77"
 
 [[package]]
 name = "fiat-crypto"
@@ -2616,18 +2583,18 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.6.5"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3f2be4da1690a039e9ae5fd575f706a63ad5a2120f161b1d653c9da3930dd21"
+checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
 dependencies = [
  "either",
 ]
 
 [[package]]
 name = "itertools"
-version = "0.10.5"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
 dependencies = [
  "either",
 ]
@@ -5967,63 +5934,45 @@ dependencies = [
 ]
 
 [[package]]
-name = "tari-curve25519-dalek"
-version = "4.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9b8e2644aae57a832e475ebc31199ab1114ebd7fe4d2621e67e89bdd9c8ac38"
-dependencies = [
- "cfg-if",
- "cpufeatures",
- "curve25519-dalek-derive",
- "fiat-crypto 0.1.20",
- "platforms",
- "rand_core 0.6.4",
- "rustc_version",
- "serde",
- "subtle",
- "zeroize",
-]
-
-[[package]]
 name = "tari_bulletproofs_plus"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9abc9cbebffb1149112a80d6955498ed891f9b786e89c50e07de4b4f16290fd8"
+checksum = "8eac57729e3b003c18e822c64c8c4977770102b2eaea920a7c40bca5caf12c54"
 dependencies = [
  "blake2",
  "byteorder",
- "derivative",
- "derive_more",
+ "curve25519-dalek",
  "digest 0.10.7",
- "itertools 0.6.5",
- "lazy_static",
+ "ff",
+ "itertools 0.12.1",
  "merlin",
- "rand 0.8.5",
+ "once_cell",
  "rand_core 0.6.4",
  "serde",
  "sha3",
- "tari-curve25519-dalek",
- "thiserror",
+ "thiserror-no-std",
  "zeroize",
 ]
 
 [[package]]
 name = "tari_crypto"
-version = "0.20.0"
+version = "0.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63a3ed2c551101eb42b7f9386c207e28d53e6816f7b4c9a0883548922f317b3e"
+checksum = "22b761f7cf1754eb2223286c9d437c81737526f393f09f69b2456bf49ba25a5b"
 dependencies = [
  "blake2",
  "borsh",
+ "curve25519-dalek",
  "digest 0.10.7",
  "log",
+ "merlin",
  "once_cell",
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
  "serde",
  "sha3",
  "snafu",
- "tari-curve25519-dalek",
+ "subtle",
  "tari_bulletproofs_plus",
  "tari_utilities",
  "zeroize",
@@ -6117,6 +6066,26 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.60",
+]
+
+[[package]]
+name = "thiserror-impl-no-std"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58e6318948b519ba6dc2b442a6d0b904ebfb8d411a3ad3e07843615a72249758"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "thiserror-no-std"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3ad459d94dd517257cc96add8a43190ee620011bb6e6cdc82dafd97dfafafea"
+dependencies = [
+ "thiserror-impl-no-std",
 ]
 
 [[package]]
