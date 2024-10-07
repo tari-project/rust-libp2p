@@ -17,12 +17,10 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
-
 use super::{
     Action, AutoNatCodec, Config, DialRequest, DialResponse, Event, HandleInnerEvent, ProbeId,
     ResponseError,
 };
-use instant::Instant;
 use libp2p_core::{multiaddr::Protocol, Multiaddr};
 use libp2p_identity::PeerId;
 use libp2p_request_response::{
@@ -36,6 +34,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     num::NonZeroU8,
 };
+use web_time::Instant;
 
 /// Inbound probe failed.
 #[derive(Debug)]
@@ -135,6 +134,7 @@ impl<'a> HandleInnerEvent for AsServer<'a> {
                                         NonZeroU8::new(1).expect("1 > 0"),
                                     )
                                     .addresses(addrs)
+                                    .allocate_new_port()
                                     .build(),
                             },
                         ])
