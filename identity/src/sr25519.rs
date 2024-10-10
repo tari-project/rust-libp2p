@@ -153,7 +153,7 @@ impl PublicKey {
         Ok(PublicKey(pk))
     }
 
-    pub(crate) fn inner(&self) -> &RistrettoPublicKey {
+    pub fn inner_key(&self) -> &RistrettoPublicKey {
         &self.0
     }
 }

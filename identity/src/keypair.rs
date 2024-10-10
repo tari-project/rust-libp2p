@@ -676,7 +676,7 @@ impl PublicKey {
     #[cfg(feature = "sr25519")]
     pub fn is_eq_sr25519(&self, other: &RistrettoPublicKey) -> bool {
         match &self.publickey {
-            PublicKeyInner::Sr25519(key) => key.inner() == other,
+            PublicKeyInner::Sr25519(key) => key.inner_key() == other,
             _ => false,
         }
     }
