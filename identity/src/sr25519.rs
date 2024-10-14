@@ -208,6 +208,11 @@ impl SecretKey {
     }
 }
 
+impl From<RistrettoSecretKey> for SecretKey {
+    fn from(value: RistrettoSecretKey) -> Self {
+        Self(value)
+    }
+}
 #[derive(Debug)]
 struct ByteArrayError(tari_crypto::tari_utilities::ByteArrayError);
 
