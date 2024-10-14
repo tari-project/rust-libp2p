@@ -6091,9 +6091,9 @@ dependencies = [
 
 [[package]]
 name = "tari_crypto"
-version = "0.20.3"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22b761f7cf1754eb2223286c9d437c81737526f393f09f69b2456bf49ba25a5b"
+checksum = "f2c126518e7d09ec8a95de51921c17430b85b3a729375310326bb95cfaa1d12b"
 dependencies = [
  "blake2",
  "borsh",
@@ -6115,12 +6115,13 @@ dependencies = [
 
 [[package]]
 name = "tari_utilities"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c1bb0e5d1d812f2be2d6ad861caad68f75adb5b2e8376264850300deb16ddc7"
+checksum = "539470532a8ca1a8a1aa26f6240586f7d0f7d90ab94ae67f092bcd75a1bb4060"
 dependencies = [
  "generic-array",
  "snafu",
+ "subtle",
  "zeroize",
 ]
 
