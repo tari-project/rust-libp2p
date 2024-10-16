@@ -147,6 +147,11 @@ impl Keypair {
         self.try_into()
     }
 
+    #[cfg(feature = "sr25519")]
+    pub fn try_into_sr25519(self) -> Result<sr25519::Keypair, OtherVariantError> {
+        self.try_into()
+    }
+
     #[cfg(feature = "secp256k1")]
     pub fn try_into_secp256k1(self) -> Result<secp256k1::Keypair, OtherVariantError> {
         self.try_into()

@@ -200,6 +200,10 @@ impl SecretKey {
         Ok(SecretKey(secret))
     }
 
+    pub fn inner_key(&self) -> &RistrettoSecretKey {
+        &self.0
+    }
+
     // Not great, leaves the secret key in stack memory (all key types not just Sr25519)
     pub(crate) fn to_bytes(&self) -> [u8; 32] {
         let mut buf = [0u8; 32];
