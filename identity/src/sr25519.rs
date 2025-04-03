@@ -222,7 +222,7 @@ struct ByteArrayError(tari_crypto::tari_utilities::ByteArrayError);
 
 impl Display for ByteArrayError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ByteArrayError")
+        write!(f, "ByteArrayError: {}", self.0)
     }
 }
 
