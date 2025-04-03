@@ -48,8 +48,6 @@ impl NetworkBehaviour for Behaviour {
         _: ConnectionId,
         event: THandlerOutEvent<Self>,
     ) {
-        // TODO: remove when Rust 1.82 is MSRV
-        #[allow(unreachable_patterns)]
         libp2p_core::util::unreachable(event)
     }
 
@@ -71,60 +69,41 @@ impl crate::handler::ConnectionHandler for ConnectionHandler {
     type InboundProtocol = DeniedUpgrade;
     type OutboundProtocol = DeniedUpgrade;
     type InboundOpenInfo = ();
-    type OutboundOpenInfo = Infallible;
+    type OutboundOpenInfo = ();
 
-    fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
+    fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
         SubstreamProtocol::new(DeniedUpgrade, ())
     }
 
     fn on_behaviour_event(&mut self, event: Self::FromBehaviour) {
-        // TODO: remove when Rust 1.82 is MSRV
-        #[allow(unreachable_patterns)]
         libp2p_core::util::unreachable(event)
     }
 
     fn poll(
         &mut self,
         _: &mut Context<'_>,
-    ) -> Poll<
-        ConnectionHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::ToBehaviour>,
-    > {
+    ) -> Poll<ConnectionHandlerEvent<Self::OutboundProtocol, (), Self::ToBehaviour>> {
         Poll::Pending
     }
 
     fn on_connection_event(
         &mut self,
-        event: ConnectionEvent<
-            Self::InboundProtocol,
-            Self::OutboundProtocol,
-            Self::InboundOpenInfo,
-            Self::OutboundOpenInfo,
-        >,
+        event: ConnectionEvent<Self::InboundProtocol, Self::OutboundProtocol>,
     ) {
         match event {
-            // TODO: remove when Rust 1.82 is MSRV
-            #[allow(unreachable_patterns)]
             ConnectionEvent::FullyNegotiatedInbound(FullyNegotiatedInbound {
                 protocol, ..
             }) => libp2p_core::util::unreachable(protocol),
-            // TODO: remove when Rust 1.82 is MSRV
-            #[allow(unreachable_patterns)]
             ConnectionEvent::FullyNegotiatedOutbound(FullyNegotiatedOutbound {
                 protocol, ..
             }) => libp2p_core::util::unreachable(protocol),
-            // TODO: remove when Rust 1.82 is MSRV
-            #[allow(unreachable_patterns)]
             ConnectionEvent::DialUpgradeError(DialUpgradeError { info: _, error }) => match error {
-                // TODO: remove when Rust 1.82 is MSRV
-                #[allow(unreachable_patterns)]
                 StreamUpgradeError::Timeout => unreachable!(),
                 StreamUpgradeError::Apply(e) => libp2p_core::util::unreachable(e),
                 StreamUpgradeError::NegotiationFailed | StreamUpgradeError::Io(_) => {
                     unreachable!("Denied upgrade does not support any protocols")
                 }
             },
-            // TODO: remove when Rust 1.82 is MSRV
-            #[allow(unreachable_patterns)]
             ConnectionEvent::AddressChange(_)
             | ConnectionEvent::ListenUpgradeError(_)
             | ConnectionEvent::LocalProtocolsChange(_)

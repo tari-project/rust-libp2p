@@ -107,7 +107,7 @@ pub struct Handler {
     queued_events: VecDeque<
         ConnectionHandlerEvent<
             <Handler as ConnectionHandler>::OutboundProtocol,
-            <Handler as ConnectionHandler>::OutboundOpenInfo,
+            (),
             <Handler as ConnectionHandler>::ToBehaviour,
         >,
     >,
@@ -241,7 +241,7 @@ impl ConnectionHandler for Handler {
     type OutboundProtocol = ReadyUpgrade<StreamProtocol>;
     type OutboundOpenInfo = ();
 
-    fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
+    fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
         SubstreamProtocol::new(ReadyUpgrade::new(STOP_PROTOCOL_NAME), ())
     }
 
@@ -267,9 +267,7 @@ impl ConnectionHandler for Handler {
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<
-        ConnectionHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::ToBehaviour>,
-    > {
+    ) -> Poll<ConnectionHandlerEvent<Self::OutboundProtocol, (), Self::ToBehaviour>> {
         loop {
             // Reservations
             match self.inflight_reserve_requests.poll_unpin(cx) {
@@ -426,12 +424,7 @@ impl ConnectionHandler for Handler {
 
     fn on_connection_event(
         &mut self,
-        event: ConnectionEvent<
-            Self::InboundProtocol,
-            Self::OutboundProtocol,
-            Self::InboundOpenInfo,
-            Self::OutboundOpenInfo,
-        >,
+        event: ConnectionEvent<Self::InboundProtocol, Self::OutboundProtocol>,
     ) {
         match event {
             ConnectionEvent::FullyNegotiatedInbound(FullyNegotiatedInbound {
@@ -451,8 +444,6 @@ impl ConnectionHandler for Handler {
                     let _ = next.send(Ok(ev.protocol));
                 }
             }
-            // TODO: remove when Rust 1.82 is MSRV
-            #[allow(unreachable_patterns)]
             ConnectionEvent::ListenUpgradeError(ev) => libp2p_core::util::unreachable(ev.error),
             ConnectionEvent::DialUpgradeError(ev) => {
                 if let Some(next) = self.pending_streams.pop_front() {
@@ -591,8 +582,6 @@ fn into_reserve_error(e: StreamUpgradeError<Infallible>) -> outbound_hop::Reserv
         StreamUpgradeError::Timeout => {
             outbound_hop::ReserveError::Io(io::ErrorKind::TimedOut.into())
         }
-        // TODO: remove when Rust 1.82 is MSRV
-        #[allow(unreachable_patterns)]
         StreamUpgradeError::Apply(never) => libp2p_core::util::unreachable(never),
         StreamUpgradeError::NegotiationFailed => outbound_hop::ReserveError::Unsupported,
         StreamUpgradeError::Io(e) => outbound_hop::ReserveError::Io(e),
@@ -604,8 +593,6 @@ fn into_connect_error(e: StreamUpgradeError<Infallible>) -> outbound_hop::Connec
         StreamUpgradeError::Timeout => {
             outbound_hop::ConnectError::Io(io::ErrorKind::TimedOut.into())
         }
-        // TODO: remove when Rust 1.82 is MSRV
-        #[allow(unreachable_patterns)]
         StreamUpgradeError::Apply(never) => libp2p_core::util::unreachable(never),
         StreamUpgradeError::NegotiationFailed => outbound_hop::ConnectError::Unsupported,
         StreamUpgradeError::Io(e) => outbound_hop::ConnectError::Io(e),

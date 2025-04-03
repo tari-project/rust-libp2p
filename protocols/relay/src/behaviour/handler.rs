@@ -343,7 +343,7 @@ pub struct Handler {
     queued_events: VecDeque<
         ConnectionHandlerEvent<
             <Self as ConnectionHandler>::OutboundProtocol,
-            <Self as ConnectionHandler>::OutboundOpenInfo,
+            (),
             <Self as ConnectionHandler>::ToBehaviour,
         >,
     >,
@@ -447,7 +447,7 @@ impl Handler {
     fn on_dial_upgrade_error(
         &mut self,
         DialUpgradeError { error, .. }: DialUpgradeError<
-            <Self as ConnectionHandler>::OutboundOpenInfo,
+            (),
             <Self as ConnectionHandler>::OutboundProtocol,
         >,
     ) {
@@ -455,8 +455,6 @@ impl Handler {
             StreamUpgradeError::Timeout => outbound_stop::Error::Io(io::ErrorKind::TimedOut.into()),
             StreamUpgradeError::NegotiationFailed => outbound_stop::Error::Unsupported,
             StreamUpgradeError::Io(e) => outbound_stop::Error::Io(e),
-            // TODO: remove when Rust 1.82 is MSRV
-            #[allow(unreachable_patterns)]
             StreamUpgradeError::Apply(v) => libp2p_core::util::unreachable(v),
         };
 
@@ -494,7 +492,7 @@ impl ConnectionHandler for Handler {
     type OutboundProtocol = ReadyUpgrade<StreamProtocol>;
     type OutboundOpenInfo = ();
 
-    fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
+    fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
         SubstreamProtocol::new(ReadyUpgrade::new(HOP_PROTOCOL_NAME), ())
     }
 
@@ -598,9 +596,7 @@ impl ConnectionHandler for Handler {
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
-    ) -> Poll<
-        ConnectionHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::ToBehaviour>,
-    > {
+    ) -> Poll<ConnectionHandlerEvent<Self::OutboundProtocol, (), Self::ToBehaviour>> {
         // Return queued events.
         if let Some(event) = self.queued_events.pop_front() {
             return Poll::Ready(event);
@@ -876,12 +872,7 @@ impl ConnectionHandler for Handler {
 
     fn on_connection_event(
         &mut self,
-        event: ConnectionEvent<
-            Self::InboundProtocol,
-            Self::OutboundProtocol,
-            Self::InboundOpenInfo,
-            Self::OutboundOpenInfo,
-        >,
+        event: ConnectionEvent<Self::InboundProtocol, Self::OutboundProtocol>,
     ) {
         match event {
             ConnectionEvent::FullyNegotiatedInbound(FullyNegotiatedInbound {

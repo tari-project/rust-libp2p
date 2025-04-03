@@ -1,6 +1,12 @@
-## 0.15.1
+## 0.16.1 
+- Emit `ToSwarm::NewExternalAddrOfPeer` for newly discovered peers.
+  See [PR 5138](https://github.com/libp2p/rust-libp2p/pull/5138).
+
+## 0.16.0
 
 - Update to `libp2p-request-response` `v0.28.0`.
+
+<!-- Update to libp2p-core v0.43.0 -->
 
 ## 0.15.0
 
