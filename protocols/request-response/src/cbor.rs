@@ -21,6 +21,15 @@
 /// A request-response behaviour using [`cbor4ii::serde`] for serializing and
 /// deserializing the messages.
 ///
+/// # Default Size Limits
+///
+/// The codec uses the following default size limits:
+/// - Maximum request size: 1,048,576 bytes (1 MiB)
+/// - Maximum response size: 10,485,760 bytes (10 MiB)
+///
+/// These limits can be customized with [`codec::Codec::set_request_size_maximum`]
+/// and [`codec::Codec::set_response_size_maximum`].
+///
 /// # Example
 ///
 /// ```
@@ -37,33 +46,37 @@
 /// }
 ///
 /// let behaviour = cbor::Behaviour::<GreetRequest, GreetResponse>::new(
-///     [(StreamProtocol::new("/my-cbor-protocol"), ProtocolSupport::Full)],
-///     request_response::Config::default()
+///     [(
+///         StreamProtocol::new("/my-cbor-protocol"),
+///         ProtocolSupport::Full,
+///     )],
+///     request_response::Config::default(),
 /// );
 /// ```
 pub type Behaviour<Req, Resp> = crate::Behaviour<codec::Codec<Req, Resp>>;
 
-mod codec {
+pub mod codec {
+    use std::{collections::TryReserveError, convert::Infallible, io, marker::PhantomData};
+
     use async_trait::async_trait;
     use cbor4ii::core::error::DecodeError;
     use futures::prelude::*;
-    use futures::{AsyncRead, AsyncWrite};
     use libp2p_swarm::StreamProtocol;
     use serde::{de::DeserializeOwned, Serialize};
-    use std::{collections::TryReserveError, convert::Infallible, io, marker::PhantomData};
-
-    /// Max request size in bytes
-    const REQUEST_SIZE_MAXIMUM: u64 = 1024 * 1024;
-    /// Max response size in bytes
-    const RESPONSE_SIZE_MAXIMUM: u64 = 10 * 1024 * 1024;
 
     pub struct Codec<Req, Resp> {
+        /// Max request size in bytes.
+        request_size_maximum: u64,
+        /// Max response size in bytes.
+        response_size_maximum: u64,
         phantom: PhantomData<(Req, Resp)>,
     }
 
     impl<Req, Resp> Default for Codec<Req, Resp> {
         fn default() -> Self {
             Codec {
+                request_size_maximum: 1024 * 1024,
+                response_size_maximum: 10 * 1024 * 1024,
                 phantom: PhantomData,
             }
         }
@@ -71,7 +84,25 @@ mod codec {
 
     impl<Req, Resp> Clone for Codec<Req, Resp> {
         fn clone(&self) -> Self {
-            Self::default()
+            Self {
+                request_size_maximum: self.request_size_maximum,
+                response_size_maximum: self.response_size_maximum,
+                phantom: PhantomData,
+            }
+        }
+    }
+
+    impl<Req, Resp> Codec<Req, Resp> {
+        /// Sets the limit for request size in bytes.
+        pub fn set_request_size_maximum(mut self, request_size_maximum: u64) -> Self {
+            self.request_size_maximum = request_size_maximum;
+            self
+        }
+
+        /// Sets the limit for response size in bytes.
+        pub fn set_response_size_maximum(mut self, response_size_maximum: u64) -> Self {
+            self.response_size_maximum = response_size_maximum;
+            self
         }
     }
 
@@ -91,7 +122,9 @@ mod codec {
         {
             let mut vec = Vec::new();
 
-            io.take(REQUEST_SIZE_MAXIMUM).read_to_end(&mut vec).await?;
+            io.take(self.request_size_maximum)
+                .read_to_end(&mut vec)
+                .await?;
 
             cbor4ii::serde::from_slice(vec.as_slice()).map_err(decode_into_io_error)
         }
@@ -102,7 +135,9 @@ mod codec {
         {
             let mut vec = Vec::new();
 
-            io.take(RESPONSE_SIZE_MAXIMUM).read_to_end(&mut vec).await?;
+            io.take(self.response_size_maximum)
+                .read_to_end(&mut vec)
+                .await?;
 
             cbor4ii::serde::from_slice(vec.as_slice()).map_err(decode_into_io_error)
         }
@@ -167,12 +202,12 @@ mod codec {
 
 #[cfg(test)]
 mod tests {
-    use crate::cbor::codec::Codec;
-    use crate::Codec as _;
     use futures::AsyncWriteExt;
     use futures_ringbuf::Endpoint;
     use libp2p_swarm::StreamProtocol;
     use serde::{Deserialize, Serialize};
+
+    use crate::{cbor::codec::Codec, Codec as _};
 
     #[async_std::test]
     async fn test_codec() {

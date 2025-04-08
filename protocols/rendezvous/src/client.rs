@@ -18,25 +18,32 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::codec::Message::*;
-use crate::codec::{Cookie, ErrorCode, Message, Namespace, NewRegistration, Registration, Ttl};
-use futures::future::BoxFuture;
-use futures::future::FutureExt;
-use futures::stream::FuturesUnordered;
-use futures::stream::StreamExt;
-use libp2p_core::{Endpoint, Multiaddr, PeerRecord};
+use std::{
+    collections::{HashMap, VecDeque},
+    iter,
+    task::{Context, Poll},
+    time::Duration,
+};
+
+use futures::{
+    future::{BoxFuture, FutureExt},
+    stream::{FuturesUnordered, StreamExt},
+};
+use libp2p_core::{transport::PortUse, Endpoint, Multiaddr, PeerRecord};
 use libp2p_identity::{Keypair, PeerId, SigningError};
 use libp2p_request_response::{OutboundRequestId, ProtocolSupport};
 use libp2p_swarm::{
     ConnectionDenied, ConnectionId, ExternalAddresses, FromSwarm, NetworkBehaviour, THandler,
     THandlerInEvent, THandlerOutEvent, ToSwarm,
 };
-use std::collections::HashMap;
-use std::iter;
-use std::task::{Context, Poll};
-use std::time::Duration;
+
+use crate::codec::{
+    Cookie, ErrorCode, Message, Message::*, Namespace, NewRegistration, Registration, Ttl,
+};
 
 pub struct Behaviour {
+    events: VecDeque<ToSwarm<<Self as NetworkBehaviour>::ToSwarm, THandlerInEvent<Self>>>,
+
     inner: libp2p_request_response::Behaviour<crate::codec::Codec>,
 
     keypair: Keypair,
@@ -46,12 +53,14 @@ pub struct Behaviour {
 
     /// Hold addresses of all peers that we have discovered so far.
     ///
-    /// Storing these internally allows us to assist the [`libp2p_swarm::Swarm`] in dialing by returning addresses from [`NetworkBehaviour::handle_pending_outbound_connection`].
+    /// Storing these internally allows us to assist the [`libp2p_swarm::Swarm`] in dialing by
+    /// returning addresses from [`NetworkBehaviour::handle_pending_outbound_connection`].
     discovered_peers: HashMap<(PeerId, Namespace), Vec<Multiaddr>>,
 
     registered_namespaces: HashMap<(PeerId, Namespace), Ttl>,
 
-    /// Tracks the expiry of registrations that we have discovered and stored in `discovered_peers` otherwise we have a memory leak.
+    /// Tracks the expiry of registrations that we have discovered and stored in `discovered_peers`
+    /// otherwise we have a memory leak.
     expiring_registrations: FuturesUnordered<BoxFuture<'static, (PeerId, Namespace)>>,
 
     external_addresses: ExternalAddresses,
@@ -61,6 +70,7 @@ impl Behaviour {
     /// Create a new instance of the rendezvous [`NetworkBehaviour`].
     pub fn new(keypair: Keypair) -> Self {
         Self {
+            events: Default::default(),
             inner: libp2p_request_response::Behaviour::with_codec(
                 crate::codec::Codec::default(),
                 iter::once((crate::PROTOCOL_IDENT, ProtocolSupport::Outbound)),
@@ -80,8 +90,9 @@ impl Behaviour {
 
     /// Register our external addresses in the given namespace with the given rendezvous peer.
     ///
-    /// External addresses are either manually added via [`libp2p_swarm::Swarm::add_external_address`] or reported
-    /// by other [`NetworkBehaviour`]s via [`ToSwarm::ExternalAddrConfirmed`].
+    /// External addresses are either manually added via
+    /// [`libp2p_swarm::Swarm::add_external_address`] or reported by other [`NetworkBehaviour`]s
+    /// via [`ToSwarm::ExternalAddrConfirmed`].
     pub fn register(
         &mut self,
         namespace: Namespace,
@@ -208,9 +219,15 @@ impl NetworkBehaviour for Behaviour {
         peer: PeerId,
         addr: &Multiaddr,
         role_override: Endpoint,
+        port_use: PortUse,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        self.inner
-            .handle_established_outbound_connection(connection_id, peer, addr, role_override)
+        self.inner.handle_established_outbound_connection(
+            connection_id,
+            peer,
+            addr,
+            role_override,
+            port_use,
+        )
     }
 
     fn on_connection_handler_event(
@@ -244,8 +261,11 @@ impl NetworkBehaviour for Behaviour {
         cx: &mut Context<'_>,
     ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         use libp2p_request_response as req_res;
-
         loop {
+            if let Some(event) = self.events.pop_front() {
+                return Poll::Ready(event);
+            }
+
             match self.inner.poll(cx) {
                 Poll::Ready(ToSwarm::GenerateEvent(req_res::Event::Message {
                     message:
@@ -386,6 +406,27 @@ impl Behaviour {
             DiscoverResponse(Ok((registrations, cookie))) => {
                 if let Some((rendezvous_node, _ns)) = self.waiting_for_discovery.remove(request_id)
                 {
+                    self.events
+                        .extend(registrations.iter().flat_map(|registration| {
+                            let peer_id = registration.record.peer_id();
+                            registration
+                                .record
+                                .addresses()
+                                .iter()
+                                .filter(|addr| {
+                                    !self.discovered_peers.iter().any(
+                                        |((discovered_peer_id, _), addrs)| {
+                                            *discovered_peer_id == peer_id && addrs.contains(addr)
+                                        },
+                                    )
+                                })
+                                .map(|address| ToSwarm::NewExternalAddrOfPeer {
+                                    peer_id,
+                                    address: address.clone(),
+                                })
+                                .collect::<Vec<_>>()
+                        }));
+
                     self.discovered_peers
                         .extend(registrations.iter().map(|registration| {
                             let peer_id = registration.record.peer_id();

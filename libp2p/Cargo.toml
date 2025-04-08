@@ -1,9 +1,9 @@
 [package]
 name = "libp2p"
-edition = "2021"
+edition.workspace = true
 rust-version = { workspace = true }
 description = "Peer-to-peer networking library"
-version = "0.53.2"
+version = "0.55.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 license = "MIT"
 repository = "https://github.com/libp2p/rust-libp2p"
@@ -29,6 +29,7 @@ full = [
     "memory-connection-limits",
     "metrics",
     "noise",
+    "peer-store",
     "ping",
     "plaintext",
     "pnet",
@@ -44,6 +45,7 @@ full = [
     "tokio",
     "uds",
     "wasm-bindgen",
+    "webrtc-websys",
     "websocket-websys",
     "websocket",
     "webtransport-websys",
@@ -58,6 +60,7 @@ dcutr = ["dep:libp2p-dcutr", "libp2p-metrics?/dcutr"]
 dns = ["dep:libp2p-dns"]
 ecdsa = ["libp2p-identity/ecdsa"]
 ed25519 = ["libp2p-identity/ed25519"]
+sr25519 = ["libp2p-identity/sr25519"]
 floodsub = ["dep:libp2p-floodsub"]
 gossipsub = ["dep:libp2p-gossipsub", "libp2p-metrics?/gossipsub"]
 identify = ["dep:libp2p-identify", "libp2p-metrics?/identify"]
@@ -68,6 +71,7 @@ mdns = ["dep:libp2p-mdns"]
 memory-connection-limits = ["dep:libp2p-memory-connection-limits"]
 metrics = ["dep:libp2p-metrics"]
 noise = ["dep:libp2p-noise"]
+peer-store = ["dep:libp2p-peer-store"]
 ping = ["dep:libp2p-ping", "libp2p-metrics?/ping"]
 plaintext = ["dep:libp2p-plaintext"]
 pnet = ["dep:libp2p-pnet"]
@@ -77,12 +81,13 @@ rendezvous = ["dep:libp2p-rendezvous"]
 request-response = ["dep:libp2p-request-response"]
 rsa = ["libp2p-identity/rsa"]
 secp256k1 = ["libp2p-identity/secp256k1"]
-serde = ["libp2p-core/serde", "libp2p-kad?/serde", "libp2p-gossipsub?/serde"]
+serde = ["libp2p-core/serde", "libp2p-kad?/serde", "libp2p-gossipsub?/serde", "libp2p-identity/serde"]
 tcp = ["dep:libp2p-tcp"]
 tls = ["dep:libp2p-tls"]
 tokio = [ "libp2p-swarm/tokio", "libp2p-mdns?/tokio", "libp2p-tcp?/tokio", "libp2p-dns?/tokio", "libp2p-quic?/tokio", "libp2p-upnp?/tokio"]
 uds = ["dep:libp2p-uds"]
-wasm-bindgen = [ "futures-timer/wasm-bindgen", "instant/wasm-bindgen", "getrandom/js", "libp2p-swarm/wasm-bindgen", "libp2p-gossipsub?/wasm-bindgen",]
+wasm-bindgen = [ "futures-timer/wasm-bindgen", "getrandom/js", "libp2p-swarm/wasm-bindgen", "libp2p-gossipsub?/wasm-bindgen"]
+webrtc-websys = ['dep:libp2p-webrtc-websys']
 websocket-websys = ["dep:libp2p-websocket-websys"]
 websocket = ["dep:libp2p-websocket"]
 webtransport-websys = ["dep:libp2p-webtransport-websys"]
@@ -92,13 +97,11 @@ upnp = ["dep:libp2p-upnp"]
 [dependencies]
 bytes = "1"
 either = "1.9.0"
-futures = "0.3.26"
+futures = { workspace = true }
 futures-timer = "3.0.2" # Explicit dependency to be used in `wasm-bindgen` feature
-getrandom = "0.2.3"     # Explicit dependency to be used in `wasm-bindgen` feature
-instant = "0.1.12"      # Explicit dependency to be used in `wasm-bindgen` feature
+getrandom = { workspace = true } # Explicit dependency to be used in `wasm-bindgen` feature
 # TODO feature flag?
 rw-stream-sink = { workspace = true }
-
 libp2p-allow-block-list = { workspace = true }
 libp2p-autonat = { workspace = true, optional = true }
 libp2p-connection-limits = { workspace = true }
@@ -107,10 +110,12 @@ libp2p-dcutr = { workspace = true, optional = true }
 libp2p-floodsub = { workspace = true, optional = true }
 libp2p-gossipsub = { workspace = true, optional = true }
 libp2p-identify = { workspace = true, optional = true }
-libp2p-identity = { workspace = true, features = ["rand"] }
+#libp2p-identity = { workspace = true, features = ["rand"] }
+libp2p-identity = { path = "../identity", features = ["rand"] }
 libp2p-kad = { workspace = true, optional = true }
 libp2p-metrics = { workspace = true, optional = true }
 libp2p-noise = { workspace = true, optional = true }
+libp2p-peer-store = { workspace = true, optional = true }
 libp2p-ping = { workspace = true, optional = true }
 libp2p-plaintext = { workspace = true, optional = true }
 libp2p-pnet = { workspace = true, optional = true }
@@ -118,12 +123,16 @@ libp2p-relay = { workspace = true, optional = true }
 libp2p-rendezvous = { workspace = true, optional = true }
 libp2p-request-response = { workspace = true, optional = true }
 libp2p-swarm = { workspace = true }
-libp2p-websocket-websys = { workspace = true, optional = true }
-libp2p-webtransport-websys = { workspace = true, optional = true }
 libp2p-yamux = { workspace = true, optional = true }
 multiaddr = { workspace = true }
+
 pin-project = "1.0.0"
-thiserror = "1.0"
+thiserror = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+libp2p-webrtc-websys = { workspace = true, optional = true }
+libp2p-websocket-websys = { workspace = true, optional = true }
+libp2p-webtransport-websys = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 libp2p-dns = { workspace = true, optional = true }
@@ -138,21 +147,16 @@ libp2p-websocket = { workspace = true, optional = true }
 
 [dev-dependencies]
 async-std = { version = "1.6.2", features = ["attributes"] }
-async-trait = "0.1"
-clap = { version = "4.1.6", features = ["derive"] }
-tokio = { version = "1.15", features = [ "io-util", "io-std", "macros", "rt", "rt-multi-thread"] }
+tokio = { workspace = true, features = [ "io-util", "io-std", "macros", "rt", "rt-multi-thread"] }
 
 libp2p-mplex = { workspace = true }
-libp2p-noise = { workspace = true }
 libp2p-tcp = { workspace = true, features = ["tokio"] }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 # Passing arguments to the docsrs builder in order to properly document cfg's.
 # More information: https://docs.rs/about/builds#cross-compiling
 [package.metadata.docs.rs]
 all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
-rustc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

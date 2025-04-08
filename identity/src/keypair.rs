@@ -22,44 +22,51 @@
     feature = "ecdsa",
     feature = "secp256k1",
     feature = "ed25519",
-    feature = "rsa"
-))]
-use crate::error::OtherVariantError;
-use crate::error::{DecodingError, SigningError};
-#[cfg(any(
-    feature = "ecdsa",
-    feature = "secp256k1",
-    feature = "ed25519",
-    feature = "rsa"
-))]
-use crate::proto;
-#[cfg(any(
-    feature = "ecdsa",
-    feature = "secp256k1",
-    feature = "ed25519",
+    feature = "sr25519",
     feature = "rsa"
 ))]
 use quick_protobuf::{BytesReader, Writer};
+
+#[cfg(feature = "ecdsa")]
+use crate::ecdsa;
 #[cfg(any(
     feature = "ecdsa",
     feature = "secp256k1",
     feature = "ed25519",
+    feature = "sr25519",
     feature = "rsa"
 ))]
-use std::convert::TryFrom;
-
 #[cfg(feature = "ed25519")]
 use crate::ed25519;
+#[cfg(any(
+    feature = "ecdsa",
+    feature = "secp256k1",
+    feature = "ed25519",
+    feature = "sr25519",
+    feature = "rsa"
+))]
+use crate::error::OtherVariantError;
+#[cfg(feature = "sr25519")]
+use crate::sr25519;
+#[cfg(any(
+    feature = "ecdsa",
+    feature = "secp256k1",
+    feature = "ed25519",
+    feature = "sr25519",
+    feature = "rsa"
+))]
+use crate::proto;
+#[cfg(feature = "sr25519")]
+use tari_crypto::ristretto::RistrettoPublicKey;
 
 #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
 use crate::rsa;
-
 #[cfg(feature = "secp256k1")]
 use crate::secp256k1;
-
-#[cfg(feature = "ecdsa")]
-use crate::ecdsa;
-use crate::KeyType;
+use crate::{
+    error::{DecodingError, SigningError},
+    KeyType,
+};
 
 /// Identity keypair of a node.
 ///
@@ -77,7 +84,6 @@ use crate::KeyType;
 /// let mut bytes = std::fs::read("private.pk8").unwrap();
 /// let keypair = Keypair::rsa_from_pkcs8(&mut bytes);
 /// ```
-///
 #[derive(Debug, Clone)]
 pub struct Keypair {
     keypair: KeyPairInner,
@@ -86,6 +92,9 @@ pub struct Keypair {
 #[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 enum KeyPairInner {
+    /// An Sr25519 keypair.
+    #[cfg(feature = "sr25519")]
+    Sr25519(sr25519::Keypair),
     /// An Ed25519 keypair.
     #[cfg(feature = "ed25519")]
     Ed25519(ed25519::Keypair),
@@ -101,6 +110,14 @@ enum KeyPairInner {
 }
 
 impl Keypair {
+    /// Generate a new Sr25519 keypair.
+    #[cfg(all(feature = "sr25519", feature = "rand"))]
+    pub fn generate_sr25519() -> Keypair {
+        Keypair {
+            keypair: KeyPairInner::Sr25519(sr25519::Keypair::generate()),
+        }
+    }
+
     /// Generate a new Ed25519 keypair.
     #[cfg(all(feature = "ed25519", feature = "rand"))]
     pub fn generate_ed25519() -> Keypair {
@@ -127,6 +144,11 @@ impl Keypair {
 
     #[cfg(feature = "ed25519")]
     pub fn try_into_ed25519(self) -> Result<ed25519::Keypair, OtherVariantError> {
+        self.try_into()
+    }
+
+    #[cfg(feature = "sr25519")]
+    pub fn try_into_sr25519(self) -> Result<sr25519::Keypair, OtherVariantError> {
         self.try_into()
     }
 
@@ -176,11 +198,22 @@ impl Keypair {
         })
     }
 
+    #[cfg(feature = "sr25519")]
+    pub fn sr25519_from_bytes(bytes: impl AsMut<[u8]>) -> Result<Keypair, DecodingError> {
+        Ok(Keypair {
+            keypair: KeyPairInner::Sr25519(sr25519::Keypair::from(
+                sr25519::SecretKey::try_from_bytes(bytes)?,
+            )),
+        })
+    }
+
     /// Sign a message using the private key of this keypair, producing
     /// a signature that can be verified using the corresponding public key.
     #[allow(unused_variables)]
     pub fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, SigningError> {
         match self.keypair {
+            #[cfg(feature = "sr25519")]
+            KeyPairInner::Sr25519(ref pair) => Ok(pair.sign(msg)),
             #[cfg(feature = "ed25519")]
             KeyPairInner::Ed25519(ref pair) => Ok(pair.sign(msg)),
             #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
@@ -195,6 +228,10 @@ impl Keypair {
     /// Get the public key of this keypair.
     pub fn public(&self) -> PublicKey {
         match self.keypair {
+            #[cfg(feature = "sr25519")]
+            KeyPairInner::Sr25519(ref pair) => PublicKey {
+                publickey: PublicKeyInner::Sr25519(pair.public().clone()),
+            },
             #[cfg(feature = "ed25519")]
             KeyPairInner::Ed25519(ref pair) => PublicKey {
                 publickey: PublicKeyInner::Ed25519(pair.public()),
@@ -220,6 +257,7 @@ impl Keypair {
             feature = "ecdsa",
             feature = "secp256k1",
             feature = "ed25519",
+            feature = "sr25519",
             feature = "rsa"
         ))]
         {
@@ -228,6 +266,11 @@ impl Keypair {
                 #[cfg(feature = "ed25519")]
                 KeyPairInner::Ed25519(ref data) => proto::PrivateKey {
                     Type: proto::KeyType::Ed25519,
+                    Data: data.to_bytes().to_vec(),
+                },
+                #[cfg(feature = "sr25519")]
+                KeyPairInner::Sr25519(ref data) => proto::PrivateKey {
+                    Type: proto::KeyType::Sr25519,
                     Data: data.to_bytes().to_vec(),
                 },
                 #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
@@ -255,6 +298,7 @@ impl Keypair {
             feature = "ecdsa",
             feature = "secp256k1",
             feature = "ed25519",
+            feature = "sr25519",
             feature = "rsa"
         )))]
         unreachable!()
@@ -267,6 +311,7 @@ impl Keypair {
             feature = "ecdsa",
             feature = "secp256k1",
             feature = "ed25519",
+            feature = "sr25519",
             feature = "rsa"
         ))]
         {
@@ -275,10 +320,19 @@ impl Keypair {
             let mut reader = BytesReader::from_bytes(bytes);
             let mut private_key = proto::PrivateKey::from_reader(&mut reader, bytes)
                 .map_err(|e| DecodingError::bad_protobuf("private key bytes", e))
-                .map(zeroize::Zeroizing::new)?;
+                .map(|a| zeroize::Zeroizing::new(a))?;
 
             #[allow(unreachable_code)]
             match private_key.Type {
+                proto::KeyType::Sr25519 => {
+                    #[cfg(feature = "sr25519")]
+                    return sr25519::Keypair::try_from_bytes(&mut private_key.Data).map(|sk| {
+                        Keypair {
+                            keypair: KeyPairInner::Sr25519(sk),
+                        }
+                    });
+                    Err(DecodingError::missing_feature("sr25519"))
+                }
                 proto::KeyType::Ed25519 => {
                     #[cfg(feature = "ed25519")]
                     return ed25519::Keypair::try_from_bytes(&mut private_key.Data).map(|sk| {
@@ -324,6 +378,7 @@ impl Keypair {
             feature = "ecdsa",
             feature = "secp256k1",
             feature = "ed25519",
+            feature = "sr25519",
             feature = "rsa"
         )))]
         unreachable!()
@@ -332,6 +387,8 @@ impl Keypair {
     /// Return a [`KeyType`] of the [`Keypair`].
     pub fn key_type(&self) -> KeyType {
         match self.keypair {
+            #[cfg(feature = "sr25519")]
+            KeyPairInner::Sr25519(_) => KeyType::Sr25519,
             #[cfg(feature = "ed25519")]
             KeyPairInner::Ed25519(_) => KeyType::Ed25519,
             #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
@@ -343,7 +400,8 @@ impl Keypair {
         }
     }
 
-    /// Deterministically derive a new secret from this [`Keypair`], taking into account the provided domain.
+    /// Deterministically derive a new secret from this [`Keypair`],
+    /// taking into account the provided domain.
     ///
     /// This works for all key types except RSA where it returns `None`.
     ///
@@ -354,14 +412,16 @@ impl Keypair {
     /// # use libp2p_identity as identity;
     /// let key = identity::Keypair::generate_ed25519();
     ///
-    /// let new_key = key.derive_secret(b"my encryption key").expect("can derive secret for ed25519");
+    /// let new_key = key
+    ///     .derive_secret(b"my encryption key")
+    ///     .expect("can derive secret for ed25519");
     /// # }
     /// ```
-    ///
     #[cfg(any(
         feature = "ecdsa",
         feature = "secp256k1",
         feature = "ed25519",
+        feature = "sr25519",
         feature = "rsa"
     ))]
     pub fn derive_secret(&self, domain: &[u8]) -> Option<[u8; 32]> {
@@ -378,6 +438,7 @@ impl Keypair {
         feature = "ecdsa",
         feature = "secp256k1",
         feature = "ed25519",
+        feature = "sr25519",
         feature = "rsa"
     )))]
     pub fn derive_secret(&self, _: &[u8]) -> Option<[u8; 32]> {
@@ -388,6 +449,8 @@ impl Keypair {
     #[allow(dead_code)]
     pub(crate) fn secret(&self) -> Option<[u8; 32]> {
         match self.keypair {
+            #[cfg(feature = "sr25519")]
+            KeyPairInner::Sr25519(ref inner) => Some(inner.secret().to_bytes()),
             #[cfg(feature = "ed25519")]
             KeyPairInner::Ed25519(ref inner) => Some(inner.secret().to_bytes()),
             #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
@@ -424,6 +487,15 @@ impl From<ed25519::Keypair> for Keypair {
     }
 }
 
+#[cfg(feature = "sr25519")]
+impl From<sr25519::Keypair> for Keypair {
+    fn from(kp: sr25519::Keypair) -> Self {
+        Keypair {
+            keypair: KeyPairInner::Sr25519(kp),
+        }
+    }
+}
+
 #[cfg(feature = "secp256k1")]
 impl From<secp256k1::Keypair> for Keypair {
     fn from(kp: secp256k1::Keypair) -> Self {
@@ -455,6 +527,27 @@ impl TryInto<ed25519::Keypair> for Keypair {
             KeyPairInner::Secp256k1(_) => Err(OtherVariantError::new(crate::KeyType::Secp256k1)),
             #[cfg(feature = "ecdsa")]
             KeyPairInner::Ecdsa(_) => Err(OtherVariantError::new(crate::KeyType::Ecdsa)),
+            #[cfg(feature = "sr25519")]
+            KeyPairInner::Sr25519(_) => Err(OtherVariantError::new(crate::KeyType::Sr25519)),
+        }
+    }
+}
+
+#[cfg(feature = "sr25519")]
+impl TryInto<sr25519::Keypair> for Keypair {
+    type Error = OtherVariantError;
+
+    fn try_into(self) -> Result<sr25519::Keypair, Self::Error> {
+        match self.keypair {
+            KeyPairInner::Sr25519(inner) => Ok(inner),
+            #[cfg(feature = "ed25519")]
+            KeyPairInner::Ed25519(_) => Err(OtherVariantError::new(crate::KeyType::Ed25519)),
+            #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
+            KeyPairInner::Rsa(_) => Err(OtherVariantError::new(crate::KeyType::RSA)),
+            #[cfg(feature = "secp256k1")]
+            KeyPairInner::Secp256k1(_) => Err(OtherVariantError::new(crate::KeyType::Secp256k1)),
+            #[cfg(feature = "ecdsa")]
+            KeyPairInner::Ecdsa(_) => Err(OtherVariantError::new(crate::KeyType::Ecdsa)),
         }
     }
 }
@@ -472,6 +565,8 @@ impl TryInto<ecdsa::Keypair> for Keypair {
             KeyPairInner::Rsa(_) => Err(OtherVariantError::new(crate::KeyType::RSA)),
             #[cfg(feature = "secp256k1")]
             KeyPairInner::Secp256k1(_) => Err(OtherVariantError::new(crate::KeyType::Secp256k1)),
+            #[cfg(feature = "sr25519")]
+            KeyPairInner::Sr25519(_) => Err(OtherVariantError::new(crate::KeyType::Sr25519)),
         }
     }
 }
@@ -483,6 +578,8 @@ impl TryInto<secp256k1::Keypair> for Keypair {
     fn try_into(self) -> Result<secp256k1::Keypair, Self::Error> {
         match self.keypair {
             KeyPairInner::Secp256k1(inner) => Ok(inner),
+            #[cfg(feature = "sr25519")]
+            KeyPairInner::Sr25519(_) => Err(OtherVariantError::new(crate::KeyType::Sr25519)),
             #[cfg(feature = "ed25519")]
             KeyPairInner::Ed25519(_) => Err(OtherVariantError::new(crate::KeyType::Ed25519)),
             #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
@@ -500,6 +597,8 @@ impl TryInto<rsa::Keypair> for Keypair {
     fn try_into(self) -> Result<rsa::Keypair, Self::Error> {
         match self.keypair {
             KeyPairInner::Rsa(inner) => Ok(inner),
+            #[cfg(feature = "sr25519")]
+            KeyPairInner::Sr25519(_) => Err(OtherVariantError::new(crate::KeyType::Sr25519)),
             #[cfg(feature = "ed25519")]
             KeyPairInner::Ed25519(_) => Err(OtherVariantError::new(crate::KeyType::Ed25519)),
             #[cfg(feature = "secp256k1")]
@@ -512,6 +611,8 @@ impl TryInto<rsa::Keypair> for Keypair {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum PublicKeyInner {
+    #[cfg(feature = "sr25519")]
+    Sr25519(sr25519::PublicKey),
     /// A public Ed25519 key.
     #[cfg(feature = "ed25519")]
     Ed25519(ed25519::PublicKey),
@@ -541,6 +642,8 @@ impl PublicKey {
     #[allow(unused_variables)]
     pub fn verify(&self, msg: &[u8], sig: &[u8]) -> bool {
         match self.publickey {
+            #[cfg(feature = "sr25519")]
+            PublicKeyInner::Sr25519(ref pk) => pk.verify(msg, sig),
             #[cfg(feature = "ed25519")]
             PublicKeyInner::Ed25519(ref pk) => pk.verify(msg, sig),
             #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
@@ -554,6 +657,11 @@ impl PublicKey {
 
     #[cfg(feature = "ed25519")]
     pub fn try_into_ed25519(self) -> Result<ed25519::PublicKey, OtherVariantError> {
+        self.try_into()
+    }
+
+    #[cfg(feature = "sr25519")]
+    pub fn try_into_sr25519(self) -> Result<sr25519::PublicKey, OtherVariantError> {
         self.try_into()
     }
 
@@ -572,6 +680,14 @@ impl PublicKey {
         self.try_into()
     }
 
+    #[cfg(feature = "sr25519")]
+    pub fn is_eq_sr25519(&self, other: &RistrettoPublicKey) -> bool {
+        match &self.publickey {
+            PublicKeyInner::Sr25519(key) => key.inner_key() == other,
+            _ => false,
+        }
+    }
+
     /// Encode the public key into a protobuf structure for storage or
     /// exchange with other nodes.
     pub fn encode_protobuf(&self) -> Vec<u8> {
@@ -579,6 +695,7 @@ impl PublicKey {
             feature = "ecdsa",
             feature = "secp256k1",
             feature = "ed25519",
+            feature = "sr25519",
             feature = "rsa"
         ))]
         {
@@ -598,6 +715,7 @@ impl PublicKey {
             feature = "ecdsa",
             feature = "secp256k1",
             feature = "ed25519",
+            feature = "sr25519",
             feature = "rsa"
         )))]
         unreachable!()
@@ -611,6 +729,7 @@ impl PublicKey {
             feature = "ecdsa",
             feature = "secp256k1",
             feature = "ed25519",
+            feature = "sr25519",
             feature = "rsa"
         ))]
         {
@@ -627,6 +746,7 @@ impl PublicKey {
             feature = "ecdsa",
             feature = "secp256k1",
             feature = "ed25519",
+            feature = "sr25519",
             feature = "rsa"
         )))]
         unreachable!()
@@ -641,6 +761,8 @@ impl PublicKey {
     /// Return a [`KeyType`] of the [`PublicKey`].
     pub fn key_type(&self) -> KeyType {
         match self.publickey {
+            #[cfg(feature = "sr25519")]
+            PublicKeyInner::Sr25519(_) => KeyType::Sr25519,
             #[cfg(feature = "ed25519")]
             PublicKeyInner::Ed25519(_) => KeyType::Ed25519,
             #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
@@ -657,6 +779,7 @@ impl PublicKey {
     feature = "ecdsa",
     feature = "secp256k1",
     feature = "ed25519",
+    feature = "sr25519",
     feature = "rsa"
 ))]
 impl TryFrom<proto::PublicKey> for PublicKey {
@@ -664,6 +787,17 @@ impl TryFrom<proto::PublicKey> for PublicKey {
 
     fn try_from(pubkey: proto::PublicKey) -> Result<Self, Self::Error> {
         match pubkey.Type {
+            #[cfg(feature = "sr25519")]
+            proto::KeyType::Sr25519 => Ok(sr25519::PublicKey::try_from_bytes(&pubkey.Data).map(
+                |kp| PublicKey {
+                    publickey: PublicKeyInner::Sr25519(kp),
+                },
+            )?),
+            #[cfg(not(feature = "sr25519"))]
+            proto::KeyType::Sr25519 => {
+                tracing::debug!("support for sr25519 was disabled at compile-time");
+                Err(DecodingError::missing_feature("sr25519"))
+            }
             #[cfg(feature = "ed25519")]
             proto::KeyType::Ed25519 => Ok(ed25519::PublicKey::try_from_bytes(&pubkey.Data).map(
                 |kp| PublicKey {
@@ -726,6 +860,27 @@ impl TryInto<ed25519::PublicKey> for PublicKey {
             PublicKeyInner::Secp256k1(_) => Err(OtherVariantError::new(crate::KeyType::Secp256k1)),
             #[cfg(feature = "ecdsa")]
             PublicKeyInner::Ecdsa(_) => Err(OtherVariantError::new(crate::KeyType::Ecdsa)),
+            #[cfg(feature = "sr25519")]
+            PublicKeyInner::Sr25519(_) => Err(OtherVariantError::new(crate::KeyType::Sr25519)),
+        }
+    }
+}
+
+#[cfg(feature = "sr25519")]
+impl TryInto<sr25519::PublicKey> for PublicKey {
+    type Error = OtherVariantError;
+
+    fn try_into(self) -> Result<sr25519::PublicKey, Self::Error> {
+        match self.publickey {
+            PublicKeyInner::Sr25519(inner) => Ok(inner),
+            #[cfg(feature = "ed25519")]
+            PublicKeyInner::Ed25519(_) => Err(OtherVariantError::new(crate::KeyType::Ed25519)),
+            #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
+            PublicKeyInner::Rsa(_) => Err(OtherVariantError::new(crate::KeyType::RSA)),
+            #[cfg(feature = "secp256k1")]
+            PublicKeyInner::Secp256k1(_) => Err(OtherVariantError::new(crate::KeyType::Secp256k1)),
+            #[cfg(feature = "ecdsa")]
+            PublicKeyInner::Ecdsa(_) => Err(OtherVariantError::new(crate::KeyType::Ecdsa)),
         }
     }
 }
@@ -739,6 +894,8 @@ impl TryInto<ecdsa::PublicKey> for PublicKey {
             PublicKeyInner::Ecdsa(inner) => Ok(inner),
             #[cfg(feature = "ed25519")]
             PublicKeyInner::Ed25519(_) => Err(OtherVariantError::new(crate::KeyType::Ed25519)),
+            #[cfg(feature = "sr25519")]
+            PublicKeyInner::Sr25519(_) => Err(OtherVariantError::new(crate::KeyType::Sr25519)),
             #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
             PublicKeyInner::Rsa(_) => Err(OtherVariantError::new(crate::KeyType::RSA)),
             #[cfg(feature = "secp256k1")]
@@ -756,6 +913,8 @@ impl TryInto<secp256k1::PublicKey> for PublicKey {
             PublicKeyInner::Secp256k1(inner) => Ok(inner),
             #[cfg(feature = "ed25519")]
             PublicKeyInner::Ed25519(_) => Err(OtherVariantError::new(crate::KeyType::Ed25519)),
+            #[cfg(feature = "sr25519")]
+            PublicKeyInner::Sr25519(_) => Err(OtherVariantError::new(crate::KeyType::Sr25519)),
             #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
             PublicKeyInner::Rsa(_) => Err(OtherVariantError::new(crate::KeyType::RSA)),
             #[cfg(feature = "ecdsa")]
@@ -773,6 +932,8 @@ impl TryInto<rsa::PublicKey> for PublicKey {
             PublicKeyInner::Rsa(inner) => Ok(inner),
             #[cfg(feature = "ed25519")]
             PublicKeyInner::Ed25519(_) => Err(OtherVariantError::new(crate::KeyType::Ed25519)),
+            #[cfg(feature = "sr25519")]
+            PublicKeyInner::Sr25519(_) => Err(OtherVariantError::new(crate::KeyType::Sr25519)),
             #[cfg(feature = "secp256k1")]
             PublicKeyInner::Secp256k1(_) => Err(OtherVariantError::new(crate::KeyType::Secp256k1)),
             #[cfg(feature = "ecdsa")]
@@ -786,6 +947,15 @@ impl From<ed25519::PublicKey> for PublicKey {
     fn from(key: ed25519::PublicKey) -> Self {
         PublicKey {
             publickey: PublicKeyInner::Ed25519(key),
+        }
+    }
+}
+
+#[cfg(feature = "sr25519")]
+impl From<sr25519::PublicKey> for PublicKey {
+    fn from(key: sr25519::PublicKey) -> Self {
+        PublicKey {
+            publickey: PublicKeyInner::Sr25519(key),
         }
     }
 }
@@ -906,8 +1076,9 @@ mod tests {
 
     #[test]
     fn public_key_implements_hash() {
-        use crate::PublicKey;
         use std::hash::Hash;
+
+        use crate::PublicKey;
 
         fn assert_implements_hash<T: Hash>() {}
 
@@ -916,8 +1087,9 @@ mod tests {
 
     #[test]
     fn public_key_implements_ord() {
-        use crate::PublicKey;
         use std::cmp::Ord;
+
+        use crate::PublicKey;
 
         fn assert_implements_ord<T: Ord>() {}
 

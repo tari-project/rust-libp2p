@@ -20,8 +20,7 @@
 
 //! Errors during identity key operations.
 
-use std::error::Error;
-use std::fmt;
+use std::{error::Error, fmt};
 
 use crate::KeyType;
 
@@ -45,6 +44,7 @@ impl DecodingError {
         feature = "ecdsa",
         feature = "secp256k1",
         feature = "ed25519",
+        feature = "sr25519",
         feature = "rsa"
     ))]
     pub(crate) fn failed_to_parse<E, S>(what: &'static str, source: S) -> Self
@@ -65,6 +65,7 @@ impl DecodingError {
         feature = "ecdsa",
         feature = "secp256k1",
         feature = "ed25519",
+        feature = "sr25519",
         feature = "rsa"
     ))]
     pub(crate) fn bad_protobuf(
