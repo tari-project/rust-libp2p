@@ -8,6 +8,12 @@
 
 This repository is the central place for Rust development of the [libp2p](https://libp2p.io) spec.
 
+## Tari fork
+- Add ristretto/Schnorr identity support
+- multiaddr moved into this repo to avoid dependency issues
+- update hickory_resolver (support for tokio resolver only)
+
+
 ## Getting started
 
 - **Main documentation** can be found on https://docs.rs/libp2p.

@@ -117,12 +117,12 @@ pub mod async_std {
 pub mod tokio {
     use std::sync::Arc;
 
-    use hickory_resolver::{system_conf, TokioResolver};
+    use hickory_resolver::{system_conf, TokioAsyncResolver, name_server::TokioConnectionProvider};
     use parking_lot::Mutex;
 
     /// A `Transport` wrapper for performing DNS lookups when dialing `Multiaddr`esses
     /// using `tokio` for all async I/O.
-    pub type Transport<T> = crate::Transport<T, TokioResolver>;
+    pub type Transport<T> = crate::Transport<T, TokioAsyncResolver>;
 
     impl<T> Transport<T> {
         /// Creates a new [`Transport`] from the OS's DNS configuration and defaults.
@@ -140,7 +140,9 @@ pub mod tokio {
         ) -> Transport<T> {
             Transport {
                 inner: Arc::new(Mutex::new(inner)),
-                resolver: TokioResolver::tokio(cfg, opts),
+                resolver: TokioAsyncResolver::builder_with_config(cfg, TokioConnectionProvider::default())
+                    .with_options(opts)
+                    .build()
             }
         }
     }
