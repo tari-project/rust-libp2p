@@ -1,4 +1,5 @@
 //! Implementation of [multiaddr](https://github.com/multiformats/multiaddr) in Rust.
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 pub use multihash;
 
@@ -12,21 +13,21 @@ mod from_url;
 pub use self::errors::{Error, Result};
 pub use self::onion_addr::Onion3Addr;
 pub use self::protocol::Protocol;
+use bytes::{BufMut, Bytes, BytesMut};
 use serde::{
     de::{self, Error as DeserializerError},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::{
     convert::TryFrom,
-    fmt, io,
+    fmt,
     iter::FromIterator,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     result::Result as StdResult,
     str::FromStr,
-    sync::Arc,
 };
 
-use libp2p_identity::PeerId;
+pub use libp2p_identity::PeerId;
 
 #[cfg(feature = "url")]
 pub use self::from_url::{from_url, from_url_lossy, FromUrlErr};
@@ -41,21 +42,21 @@ static_assertions::const_assert! {
 #[allow(clippy::rc_buffer)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct Multiaddr {
-    bytes: Arc<Vec<u8>>,
+    bytes: Bytes,
 }
 
 impl Multiaddr {
     /// Create a new, empty multiaddress.
     pub fn empty() -> Self {
         Self {
-            bytes: Arc::new(Vec::new()),
+            bytes: Bytes::new(),
         }
     }
 
     /// Create a new, empty multiaddress with the given capacity.
     pub fn with_capacity(n: usize) -> Self {
         Self {
-            bytes: Arc::new(Vec::with_capacity(n)),
+            bytes: BytesMut::with_capacity(n).freeze(),
         }
     }
 
@@ -87,10 +88,10 @@ impl Multiaddr {
     /// ```
     ///
     pub fn push(&mut self, p: Protocol<'_>) {
-        let mut w = io::Cursor::<&mut Vec<u8>>::new(Arc::make_mut(&mut self.bytes));
-        w.set_position(w.get_ref().len() as u64);
-        p.write_bytes(&mut w)
-            .expect("Writing to a `io::Cursor<&mut Vec<u8>>` never fails.")
+        let mut bytes = BytesMut::from(std::mem::take(&mut self.bytes));
+        p.write_bytes(&mut (&mut bytes).writer())
+            .expect("Writing to a `BytesMut` never fails.");
+        self.bytes = bytes.freeze();
     }
 
     /// Pops the last `Protocol` of this multiaddr, or `None` if the multiaddr is empty.
@@ -115,17 +116,19 @@ impl Multiaddr {
             }
             slice = s
         };
-        let remaining_len = self.bytes.len() - slice.len();
-        Arc::make_mut(&mut self.bytes).truncate(remaining_len);
+        let remaining_len = self.len() - slice.len();
+        let mut bytes = BytesMut::from(std::mem::take(&mut self.bytes));
+        bytes.truncate(remaining_len);
+        self.bytes = bytes.freeze();
         Some(protocol)
     }
 
     /// Like [`Multiaddr::push`] but consumes `self`.
     pub fn with(mut self, p: Protocol<'_>) -> Self {
-        let mut w = io::Cursor::<&mut Vec<u8>>::new(Arc::make_mut(&mut self.bytes));
-        w.set_position(w.get_ref().len() as u64);
-        p.write_bytes(&mut w)
-            .expect("Writing to a `io::Cursor<&mut Vec<u8>>` never fails.");
+        let mut bytes = BytesMut::from(std::mem::take(&mut self.bytes));
+        p.write_bytes(&mut (&mut bytes).writer())
+            .expect("Writing to a `BytesMut` never fails.");
+        self.bytes = bytes.freeze();
         self
     }
 
@@ -207,9 +210,19 @@ impl Multiaddr {
         self.bytes[(n - m)..] == other.bytes[..]
     }
 
+    /// Checks whether the given `Multiaddr` is a prefix of this `Multiaddr`.
+    pub fn starts_with(&self, other: &Multiaddr) -> bool {
+        let n = self.bytes.len();
+        let m = other.bytes.len();
+        if n < m {
+            return false;
+        }
+        self.bytes[..m] == other.bytes[..]
+    }
+
     /// Returns &str identifiers for the protocol names themselves.
     /// This omits specific info like addresses, ports, peer IDs, and the like.
-    /// Example: `"/ip4/127.0.0.1/tcp/5001"` would return `["ip4", "tcp"]`  
+    /// Example: `"/ip4/127.0.0.1/tcp/5001"` would return `["ip4", "tcp"]`
     pub fn protocol_stack(&self) -> ProtoStackIter {
         ProtoStackIter { parts: self.iter() }
     }
@@ -261,13 +274,13 @@ impl<'a> FromIterator<Protocol<'a>> for Multiaddr {
     where
         T: IntoIterator<Item = Protocol<'a>>,
     {
-        let mut writer = Vec::new();
+        let mut bytes = BytesMut::new();
         for cmp in iter {
-            cmp.write_bytes(&mut writer)
-                .expect("Writing to a `Vec` never fails.");
+            cmp.write_bytes(&mut (&mut bytes).writer())
+                .expect("Writing to a `BytesMut` never fails.");
         }
         Multiaddr {
-            bytes: Arc::new(writer),
+            bytes: bytes.freeze(),
         }
     }
 }
@@ -276,7 +289,7 @@ impl FromStr for Multiaddr {
     type Err = Error;
 
     fn from_str(input: &str) -> Result<Self> {
-        let mut writer = Vec::new();
+        let mut bytes = BytesMut::new();
         let mut parts = input.split('/').peekable();
 
         if Some("") != parts.next() {
@@ -286,12 +299,12 @@ impl FromStr for Multiaddr {
 
         while parts.peek().is_some() {
             let p = Protocol::from_str_parts(&mut parts)?;
-            p.write_bytes(&mut writer)
-                .expect("Writing to a `Vec` never fails.");
+            p.write_bytes(&mut (&mut bytes).writer())
+                .expect("Writing to a `BytesMut` never fails.");
         }
 
         Ok(Multiaddr {
-            bytes: Arc::new(writer),
+            bytes: bytes.freeze(),
         })
     }
 }
@@ -315,12 +328,12 @@ impl<'a> Iterator for Iter<'a> {
     }
 }
 
-/// Iterator over the string idtenfiers of the protocols (not addrs) in a multiaddr
+/// Iterator over the string identifiers of the protocols (not addrs) in a multiaddr
 pub struct ProtoStackIter<'a> {
     parts: Iter<'a>,
 }
 
-impl<'a> Iterator for ProtoStackIter<'a> {
+impl Iterator for ProtoStackIter<'_> {
     type Item = &'static str;
     fn next(&mut self) -> Option<Self::Item> {
         self.parts.next().as_ref().map(Protocol::tag)
@@ -329,10 +342,12 @@ impl<'a> Iterator for ProtoStackIter<'a> {
 
 impl<'a> From<Protocol<'a>> for Multiaddr {
     fn from(p: Protocol<'a>) -> Multiaddr {
-        let mut w = Vec::new();
-        p.write_bytes(&mut w)
-            .expect("Writing to a `Vec` never fails.");
-        Multiaddr { bytes: Arc::new(w) }
+        let mut bytes = BytesMut::new();
+        p.write_bytes(&mut (&mut bytes).writer())
+            .expect("Writing to a `BytesMut` never fails.");
+        Multiaddr {
+            bytes: bytes.freeze(),
+        }
     }
 }
 
@@ -367,7 +382,9 @@ impl TryFrom<Vec<u8>> for Multiaddr {
             let (_, s) = Protocol::from_bytes(slice)?;
             slice = s
         }
-        Ok(Multiaddr { bytes: Arc::new(v) })
+        Ok(Multiaddr {
+            bytes: Bytes::from(v),
+        })
     }
 }
 

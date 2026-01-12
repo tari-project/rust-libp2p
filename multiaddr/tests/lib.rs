@@ -1,5 +1,4 @@
 use data_encoding::HEXUPPER;
-use libp2p_identity::PeerId;
 use multiaddr::*;
 use multihash::Multihash;
 use quickcheck::{Arbitrary, Gen, QuickCheck};
@@ -69,6 +68,18 @@ fn ends_with() {
     QuickCheck::new().quickcheck(prop as fn(_))
 }
 
+#[test]
+fn starts_with() {
+    fn prop(Ma(m): Ma) {
+        let n = m.iter().count();
+        for i in 0..n {
+            let prefix = m.iter().take(i + 1).collect::<Multiaddr>();
+            assert!(m.starts_with(&prefix));
+        }
+    }
+    QuickCheck::new().quickcheck(prop as fn(_))
+}
+
 // Arbitrary impls
 
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
@@ -85,7 +96,7 @@ impl Arbitrary for Ma {
 struct Proto(Protocol<'static>);
 
 impl Proto {
-    const IMPL_VARIANT_COUNT: u8 = 32;
+    const IMPL_VARIANT_COUNT: u8 = 40;
 }
 
 impl Arbitrary for Proto {
@@ -138,6 +149,30 @@ impl Arbitrary for Proto {
             29 => Proto(WebTransport),
             30 => Proto(Ws("/".into())),
             31 => Proto(Wss("/".into())),
+            32 => Proto(Ip6zone(Cow::Owned(SubString::arbitrary(g).0))),
+            33 => Proto(Ipcidr(Arbitrary::arbitrary(g))),
+            34 => {
+                let len = usize::arbitrary(g) % (462 - 387) + 387;
+                let a = iter::repeat_with(|| u8::arbitrary(g))
+                    .take(len)
+                    .collect::<Vec<_>>();
+                Proto(Garlic64(Cow::Owned(a)))
+            }
+            35 => {
+                let len = if bool::arbitrary(g) {
+                    32
+                } else {
+                    usize::arbitrary(g) % 128 + 35
+                };
+                let a = iter::repeat_with(|| u8::arbitrary(g))
+                    .take(len)
+                    .collect::<Vec<_>>();
+                Proto(Garlic32(Cow::Owned(a)))
+            }
+            36 => Proto(Sni(Cow::Owned(SubString::arbitrary(g).0))),
+            37 => Proto(P2pStardust),
+            38 => Proto(WebRTC),
+            39 => Proto(HttpPath(Cow::Owned(SubString::arbitrary(g).0))),
             _ => panic!("outside range"),
         }
     }
@@ -232,6 +267,14 @@ fn construct_success() {
         "29260100094F819700803ECA6566E80C21",
         vec![Ip6("2601:9:4f81:9700:803e:ca65:66e8:c21".parse().unwrap())],
     );
+    ma_valid(
+        "/ip6/fe80::9700:803e:ca65:66e8:c21/ip6zone/wlan0",
+        "29FE80000000009700803ECA6566E80C212A05776C616E30",
+        vec![
+            Ip6("fe80::9700:803e:ca65:66e8:c21".parse().unwrap()),
+            Ip6zone(Cow::Borrowed("wlan0")),
+        ],
+    );
     ma_valid("/udp/0", "91020000", vec![Udp(0)]);
     ma_valid("/tcp/0", "060000", vec![Tcp(0)]);
     ma_valid("/sctp/0", "84010000", vec![Sctp(0)]);
@@ -259,6 +302,21 @@ fn construct_success() {
         "/tcp/1234/tls/http",
         "0604D2C003E003",
         vec![Tcp(1234), Tls, Http],
+    );
+    ma_valid(
+        "/tcp/1234/http/http-path/user",
+        "0604D2E003E1030475736572",
+        vec![Tcp(1234), Http, HttpPath(Cow::Borrowed("user"))],
+    );
+    ma_valid(
+        "/tcp/1234/http/http-path/api%2Fv0%2Flogin",
+        "0604D2E003E1030C6170692F76302F6C6F67696E",
+        vec![Tcp(1234), Http, HttpPath(Cow::Borrowed("api/v0/login"))],
+    );
+    ma_valid(
+        "/tcp/1234/http/http-path/a%2520space",
+        "0604D2E003E10309612532307370616365",
+        vec![Tcp(1234), Http, HttpPath(Cow::Borrowed("a%20space"))],
     );
     ma_valid("/tcp/1234/https", "0604D2BB03", vec![Tcp(1234), Https]);
     ma_valid(
@@ -334,6 +392,44 @@ fn construct_success() {
                 1234,
             )
                 .into(),
+        )],
+    );
+    ma_valid(
+        "/garlic64/jT~IyXaoauTni6N4517EG8mrFUKpy0IlgZh-EY9csMAk82Odatmzr~YTZy8Hv7u~wvkg75EFNOyqb~nAPg-khyp2TS~ObUz8WlqYAM2VlEzJ7wJB91P-cUlKF\
+        18zSzVoJFmsrcQHZCirSbWoOknS6iNmsGRh5KVZsBEfp1Dg3gwTipTRIx7Vl5Vy~1OSKQVjYiGZS9q8RL0MF~7xFiKxZDLbPxk0AK9TzGGqm~wMTI2HS0Gm4Ycy8LYPVmLvG\
+        onIBYndg2bJC7WLuF6tVjVquiokSVDKFwq70BCUU5AU-EvdOD5KEOAM7mPfw-gJUG4tm1TtvcobrObqoRnmhXPTBTN5H7qDD12AvlwFGnfAlBXjuP4xOUAISL5SRLiulrsMS\
+        iT4GcugSI80mF6sdB0zWRgL1yyvoVWeTBn1TqjO27alr95DGTluuSqrNAxgpQzCKEWAyzrQkBfo2avGAmmz2NaHaAvYbOg0QSJz1PLjv2jdPW~ofiQmrGWM1cd~1cCqAAAA",
+        "BE0383038D3FC8C976A86AE4E78BA378E75EC41BC9AB1542A9CB422581987E118F5CB0C024F3639D6AD9B3AFF613672F07BFBBBFC2F920EF910534ECAA6FF9C03E\
+        0FA4872A764D2FCE6D4CFC5A5A9800CD95944CC9EF0241F753FE71494A175F334B35682459ACADC4076428AB49B5A83A49D2EA2366B06461E4A559B0111FA750E0D\
+        E0C138A94D1231ED5979572FF53922905636221994BDABC44BD0C17FEF11622B16432DB3F193400AF53CC61AA9BFC0C4C8D874B41A6E18732F0B60F5662EF1A89C8\
+        0589DD8366C90BB58BB85EAD56356ABA2A244950CA170ABBD01094539014F84BDD383E4A10E00CEE63DFC3E809506E2D9B54EDBDCA1BACE6EAA119E68573D305337\
+        91FBA830F5D80BE5C051A77C09415E3B8FE3139400848BE5244B8AE96BB0C4A24F819CBA0488F34985EAC741D3359180BD72CAFA1559E4C19F54EA8CEDBB6A5AFDE\
+        4319396EB92AAB340C60A50CC2284580CB3AD09017E8D9ABC60269B3D8D687680BD86CE834412273D4F2E3BF68DD3D6FE87E2426AC658CD5C77FD5C0AA000000",
+        vec![Garlic64(
+            (
+                &[
+                    141, 63, 200, 201, 118, 168, 106, 228, 231, 139, 163, 120, 231, 94, 196, 27, 201, 171, 21, 66,
+                    169, 203, 66, 37, 129, 152, 126, 17, 143, 92, 176, 192, 36, 243, 99, 157, 106, 217, 179, 175,
+                    246, 19, 103, 47, 7, 191, 187, 191, 194, 249, 32, 239, 145, 5, 52, 236, 170, 111, 249, 192,
+                    62, 15, 164, 135, 42, 118, 77, 47, 206, 109, 76, 252, 90, 90, 152, 0, 205, 149, 148, 76,
+                    201, 239, 2, 65, 247, 83, 254, 113, 73, 74, 23, 95, 51, 75, 53, 104, 36, 89, 172, 173,
+                    196, 7, 100, 40, 171, 73, 181, 168, 58, 73, 210, 234, 35, 102, 176, 100, 97, 228, 165, 89,
+                    176, 17, 31, 167, 80, 224, 222, 12, 19, 138, 148, 209, 35, 30, 213, 151, 149, 114, 255, 83,
+                    146, 41, 5, 99, 98, 33, 153, 75, 218, 188, 68, 189, 12, 23, 254, 241, 22, 34, 177, 100,
+                    50, 219, 63, 25, 52, 0, 175, 83, 204, 97, 170, 155, 252, 12, 76, 141, 135, 75, 65, 166,
+                    225, 135, 50, 240, 182, 15, 86, 98, 239, 26, 137, 200, 5, 137, 221, 131, 102, 201, 11, 181,
+                    139, 184, 94, 173, 86, 53, 106, 186, 42, 36, 73, 80, 202, 23, 10, 187, 208, 16, 148, 83,
+                    144, 20, 248, 75, 221, 56, 62, 74, 16, 224, 12, 238, 99, 223, 195, 232, 9, 80, 110, 45,
+                    155, 84, 237, 189, 202, 27, 172, 230, 234, 161, 25, 230, 133, 115, 211, 5, 51, 121, 31, 186,
+                    131, 15, 93, 128, 190, 92, 5, 26, 119, 192, 148, 21, 227, 184, 254, 49, 57, 64, 8, 72,
+                    190, 82, 68, 184, 174, 150, 187, 12, 74, 36, 248, 25, 203, 160, 72, 143, 52, 152, 94, 172,
+                    116, 29, 51, 89, 24, 11, 215, 44, 175, 161, 85, 158, 76, 25, 245, 78, 168, 206, 219, 182,
+                    165, 175, 222, 67, 25, 57, 110, 185, 42, 171, 52, 12, 96, 165, 12, 194, 40, 69, 128, 203,
+                    58, 208, 144, 23, 232, 217, 171, 198, 2, 105, 179, 216, 214, 135, 104, 11, 216, 108, 232, 52,
+                    65, 34, 115, 212, 242, 227, 191, 104, 221, 61, 111, 232, 126, 36, 38, 172, 101, 140, 213, 199,
+                    127, 213, 192, 170, 0, 0, 0,
+                ]
+            ).into()
         )],
     );
     ma_valid(
@@ -414,6 +510,7 @@ fn construct_fail() {
         "/ip4/::1",
         "/ip4/fdpsofodsajfdoisa",
         "/ip6",
+        "/ip6/fe80::9700:803e:ca65:66e8:c21/ip6zone",
         "/udp",
         "/tcp",
         "/sctp",
@@ -431,6 +528,12 @@ fn construct_fail() {
         "/onion3/vww6ybal4bd7szmgncyruucpgfkqahzddi37ktceo3ah7ngmcopnpyyd:-1",
         "/onion3/vww6ybal4bd7szmgncyruucpgfkqahzddi37ktceo3ah7ngmcopnpyyd",
         "/onion3/vww6ybal4bd7szmgncyruucpgfkqahzddi37ktceo3ah7ngmcopnpyy@:666",
+        "/garlic64/jT~",
+        "/garlic32/566niximlxdzpanmn4qouucvua3k7neniwss47li5r6ugoertzu",
+        "/garlic32/566niximlxdzpanmn4qouucvua3k7neniwss47li5r6ugoertzu77",
+        "/garlic32/566niximlxdzpanmn4qouucvua3k7neniwss47li5r6ugoertzu:80",
+        "/garlic32/566niximlxdzpanmn4qouucvua3k7neniwss47li5r6ugoertzuq:-1",
+        "/garlic32/566niximlxdzpanmn4qouucvua3k7neniwss47li5r6ugoertzu@",
         "/udp/1234/sctp",
         "/udp/1234/udt/1234",
         "/udp/1234/utp/1234",
@@ -443,6 +546,7 @@ fn construct_fail() {
         "/p2p-circuit/50",
         "/ip4/127.0.0.1/udp/1234/webrtc-direct/certhash",
         "/ip4/127.0.0.1/udp/1234/webrtc-direct/certhash/b2uaraocy6yrdblb4sfptaddgimjmmp", // 1 character missing from certhash
+        "/tcp/1234/http/http-path/a/b",
     ];
 
     for address in &addresses {
@@ -582,6 +686,7 @@ fn protocol_stack() {
         "/ip4/0.0.0.0",
         "/ip6/::1",
         "/ip6/2601:9:4f81:9700:803e:ca65:66e8:c21",
+        "/ip6/fe80::9700:803e:ca65:66e8:c21/ip6zone/wlan0",
         "/udp/0",
         "/tcp/0",
         "/sctp/0",
@@ -596,6 +701,9 @@ fn protocol_stack() {
         "/udp/1234/utp",
         "/tcp/1234/http",
         "/tcp/1234/tls/http",
+        "/tcp/1234/http/http-path/user",
+        "/tcp/1234/http/http-path/api%2Fv1%2Flogin",
+        "/tcp/1234/http/http-path/a%20space",
         "/tcp/1234/https",
         "/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC/tcp/1234",
         "/ip4/127.0.0.1/udp/1234",
@@ -663,8 +771,7 @@ fn arbitrary_impl_for_all_proto_variants() {
 }
 
 mod multiaddr_with_p2p {
-    use libp2p_identity::PeerId;
-    use multiaddr::Multiaddr;
+    use multiaddr::{Multiaddr, PeerId};
 
     fn test_multiaddr_with_p2p(
         multiaddr: &str,

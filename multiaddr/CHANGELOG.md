@@ -1,3 +1,20 @@
+# 0.18.3
+
+- Add `starts_with` on `Multiaddr`. See [PR 119].
+
+[PR 119]: https://github.com/multiformats/rust-multiaddr/pull/119
+
+# 0.18.2
+
+- Implement missing protocols. See [PR 110].
+  [PR 110]: https://github.com/multiformats/rust-multiaddr/pull/110.
+
+- Re-export `libp2p_identity::PeerId`. See [PR 108].
+  [PR 108]: https://github.com/multiformats/rust-multiaddr/pull/108.
+
+- Avoid allocations in Display and Debug of Multiaddr. See [PR 106].
+  [PR 106]: https://github.com/multiformats/rust-multiaddr/pull/106
+
 # 0.18.1
 
 - Add `with_p2p` on `Multiaddr`. See [PR 102].
@@ -105,7 +122,7 @@
 
 - Merge  [multiaddr] and [parity-multiaddr] (see [PR 40]).
 
-    - Functionality to go from a `u64` to a `multiadddr::Protocol` and back is
+    - Functionality to go from a `u64` to a `multiaddr::Protocol` and back is
       removed. Please open an issue on [multiaddr] in case this is still needed.
 
     - Given that `multiaddr::Protocol` now represents both the protocol

@@ -18,7 +18,6 @@ futures-timer = "3"
 web-time = { workspace = true }
 #libp2p-identity = { workspace = true, features = ["peerid", "ed25519"] }
 libp2p-identity = { path = "../identity", features = ["peerid", "ed25519"] }
-#multiaddr = { workspace = true }
 multiaddr = { workspace = true }
 multihash = { workspace = true }
 multistream-select = { workspace = true }

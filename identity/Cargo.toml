@@ -37,7 +37,7 @@ secp256k1 = ["dep:k256", "dep:asn1_der", "dep:sha2", "dep:hkdf", "dep:zeroize", 
 ecdsa = ["dep:p256", "dep:zeroize", "dep:sec1", "dep:sha2", "dep:hkdf", "dep:quick-protobuf"]
 rsa = ["dep:ring", "dep:asn1_der", "dep:rand", "dep:zeroize", "dep:quick-protobuf"]
 ed25519 = ["dep:ed25519-dalek", "dep:zeroize", "dep:sha2", "dep:hkdf", "dep:quick-protobuf"]
-sr25519 = ["dep:tari_crypto", "dep:zeroize", "dep:sha2", "dep:hkdf", "dep:rand"]
+sr25519 = ["dep:tari_crypto", "dep:zeroize", "dep:sha2", "dep:hkdf", "dep:rand", "dep:quick-protobuf"]
 peerid = ["dep:multihash", "dep:bs58", "dep:thiserror", "dep:sha2", "dep:hkdf"]
 rand = ["dep:rand"]
 
