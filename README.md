@@ -84,6 +84,7 @@ Conduct](https://github.com/ipfs/community/blob/master/code-of-conduct.md).
 
 (In alphabetical order.)
 
+- Elena Frank ([@elenaf9](https://github.com/elenaf9))
 - João Oliveira ([@jxs](https://github.com/jxs))
 
 ## Notable users
