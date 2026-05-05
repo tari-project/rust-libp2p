@@ -61,7 +61,7 @@ impl Keypair {
 
     /// Sign a message using the private key of this keypair.
     pub fn sign(&self, msg: &[u8]) -> Vec<u8> {
-        let sig = RistrettoSchnorr::sign(&self.secret.0, msg, &mut rand::rngs::OsRng).expect(
+        let sig = RistrettoSchnorr::sign(&self.secret.0, msg, &mut rand::rng()).expect(
             "SchnorrSignature::sign shouldn't return a Result (Blake2b<u64> is hard coded as the hasher)",
         );
         let mut buf = vec![0u8; 64];
@@ -185,7 +185,7 @@ impl SecretKey {
     /// Generate a new Sr25519 secret key.
     #[cfg(feature = "rand")]
     pub fn generate() -> SecretKey {
-        SecretKey(RistrettoSecretKey::random(&mut rand::rngs::OsRng))
+        SecretKey(RistrettoSecretKey::random(&mut rand::rng()))
     }
 
     /// Try to parse an Sr25519 secret key from a byte slice
