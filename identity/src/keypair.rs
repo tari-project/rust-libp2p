@@ -25,7 +25,7 @@
     feature = "sr25519",
     feature = "rsa"
 ))]
-use quick_protobuf::{BytesReader, Writer};
+use prost::Message;
 
 #[cfg(feature = "ecdsa")]
 use crate::ecdsa;
@@ -261,37 +261,32 @@ impl Keypair {
             feature = "rsa"
         ))]
         {
-            use quick_protobuf::MessageWrite;
             let pk: proto::PrivateKey = match self.keypair {
                 #[cfg(feature = "ed25519")]
                 KeyPairInner::Ed25519(ref data) => proto::PrivateKey {
-                    Type: proto::KeyType::Ed25519,
-                    Data: data.to_bytes().to_vec(),
+                    r#type: proto::KeyType::Ed25519 as i32,
+                    data: data.to_bytes().to_vec(),
                 },
                 #[cfg(feature = "sr25519")]
                 KeyPairInner::Sr25519(ref data) => proto::PrivateKey {
-                    Type: proto::KeyType::Sr25519,
-                    Data: data.to_bytes().to_vec(),
+                    r#type: proto::KeyType::Sr25519,
+                    data: data.to_bytes().to_vec(),
                 },
                 #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
                 KeyPairInner::Rsa(_) => return Err(DecodingError::encoding_unsupported("RSA")),
                 #[cfg(feature = "secp256k1")]
                 KeyPairInner::Secp256k1(ref data) => proto::PrivateKey {
-                    Type: proto::KeyType::Secp256k1,
-                    Data: data.secret().to_bytes().to_vec(),
+                    r#type: proto::KeyType::Secp256k1 as i32,
+                    data: data.secret().to_bytes().to_vec(),
                 },
                 #[cfg(feature = "ecdsa")]
                 KeyPairInner::Ecdsa(ref data) => proto::PrivateKey {
-                    Type: proto::KeyType::ECDSA,
-                    Data: data.secret().encode_der(),
+                    r#type: proto::KeyType::Ecdsa as i32,
+                    data: data.secret().encode_der(),
                 },
             };
 
-            let mut buf = Vec::with_capacity(pk.get_size());
-            let mut writer = Writer::new(&mut buf);
-            pk.write_message(&mut writer).expect("Encoding to succeed");
-
-            Ok(buf)
+            Ok(pk.encode_to_vec())
         }
 
         #[cfg(not(any(
@@ -315,15 +310,15 @@ impl Keypair {
             feature = "rsa"
         ))]
         {
-            use quick_protobuf::MessageRead;
-
-            let mut reader = BytesReader::from_bytes(bytes);
-            let mut private_key = proto::PrivateKey::from_reader(&mut reader, bytes)
+            let mut private_key = proto::PrivateKey::decode(bytes)
                 .map_err(|e| DecodingError::bad_protobuf("private key bytes", e))
                 .map(|a| zeroize::Zeroizing::new(a))?;
 
+            let key_type = proto::KeyType::try_from(private_key.r#type)
+                .map_err(|_| DecodingError::unknown_key_type(private_key.r#type))?;
+
             #[allow(unreachable_code)]
-            match private_key.Type {
+            match key_type {
                 proto::KeyType::Sr25519 => {
                     #[cfg(feature = "sr25519")]
                     return sr25519::Keypair::try_from_bytes(&mut private_key.Data).map(|sk| {
@@ -335,16 +330,16 @@ impl Keypair {
                 }
                 proto::KeyType::Ed25519 => {
                     #[cfg(feature = "ed25519")]
-                    return ed25519::Keypair::try_from_bytes(&mut private_key.Data).map(|sk| {
+                    return ed25519::Keypair::try_from_bytes(&mut private_key.data).map(|sk| {
                         Keypair {
                             keypair: KeyPairInner::Ed25519(sk),
                         }
                     });
                     Err(DecodingError::missing_feature("ed25519"))
                 }
-                proto::KeyType::RSA => {
+                proto::KeyType::Rsa => {
                     #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
-                    return rsa::Keypair::try_decode_pkcs1(&mut private_key.Data).map(|sk| {
+                    return rsa::Keypair::try_decode_pkcs1(&mut private_key.data).map(|sk| {
                         Keypair {
                             keypair: KeyPairInner::Rsa(sk),
                         }
@@ -353,7 +348,7 @@ impl Keypair {
                 }
                 proto::KeyType::Secp256k1 => {
                     #[cfg(feature = "secp256k1")]
-                    return secp256k1::SecretKey::try_from_bytes(&mut private_key.Data).map(
+                    return secp256k1::SecretKey::try_from_bytes(&mut private_key.data).map(
                         |key| Keypair {
                             keypair: KeyPairInner::Secp256k1(key.into()),
                         },
@@ -361,9 +356,9 @@ impl Keypair {
 
                     Err(DecodingError::missing_feature("secp256k1"))
                 }
-                proto::KeyType::ECDSA => {
+                proto::KeyType::Ecdsa => {
                     #[cfg(feature = "ecdsa")]
-                    return ecdsa::SecretKey::try_decode_der(&mut private_key.Data).map(|key| {
+                    return ecdsa::SecretKey::try_decode_der(&mut private_key.data).map(|key| {
                         Keypair {
                             keypair: KeyPairInner::Ecdsa(key.into()),
                         }
@@ -699,16 +694,9 @@ impl PublicKey {
             feature = "rsa"
         ))]
         {
-            use quick_protobuf::MessageWrite;
             let public_key = proto::PublicKey::from(self);
 
-            let mut buf = Vec::with_capacity(public_key.get_size());
-            let mut writer = Writer::new(&mut buf);
-            public_key
-                .write_message(&mut writer)
-                .expect("Encoding to succeed");
-
-            buf
+            public_key.encode_to_vec()
         }
 
         #[cfg(not(any(
@@ -733,10 +721,7 @@ impl PublicKey {
             feature = "rsa"
         ))]
         {
-            use quick_protobuf::MessageRead;
-            let mut reader = BytesReader::from_bytes(bytes);
-
-            let pubkey = proto::PublicKey::from_reader(&mut reader, bytes)
+            let pubkey = proto::PublicKey::decode(bytes)
                 .map_err(|e| DecodingError::bad_protobuf("public key bytes", e))?;
 
             pubkey.try_into()
@@ -786,7 +771,10 @@ impl TryFrom<proto::PublicKey> for PublicKey {
     type Error = DecodingError;
 
     fn try_from(pubkey: proto::PublicKey) -> Result<Self, Self::Error> {
-        match pubkey.Type {
+        let key_type = proto::KeyType::try_from(pubkey.r#type)
+            .map_err(|_| DecodingError::unknown_key_type(pubkey.r#type))?;
+
+        match key_type {
             #[cfg(feature = "sr25519")]
             proto::KeyType::Sr25519 => Ok(sr25519::PublicKey::try_from_bytes(&pubkey.Data).map(
                 |kp| PublicKey {
@@ -799,7 +787,7 @@ impl TryFrom<proto::PublicKey> for PublicKey {
                 Err(DecodingError::missing_feature("sr25519"))
             }
             #[cfg(feature = "ed25519")]
-            proto::KeyType::Ed25519 => Ok(ed25519::PublicKey::try_from_bytes(&pubkey.Data).map(
+            proto::KeyType::Ed25519 => Ok(ed25519::PublicKey::try_from_bytes(&pubkey.data).map(
                 |kp| PublicKey {
                     publickey: PublicKeyInner::Ed25519(kp),
                 },
@@ -810,20 +798,20 @@ impl TryFrom<proto::PublicKey> for PublicKey {
                 Err(DecodingError::missing_feature("ed25519"))
             }
             #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
-            proto::KeyType::RSA => {
+            proto::KeyType::Rsa => {
                 Ok(
-                    rsa::PublicKey::try_decode_x509(&pubkey.Data).map(|kp| PublicKey {
+                    rsa::PublicKey::try_decode_x509(&pubkey.data).map(|kp| PublicKey {
                         publickey: PublicKeyInner::Rsa(kp),
                     })?,
                 )
             }
             #[cfg(any(not(feature = "rsa"), target_arch = "wasm32"))]
-            proto::KeyType::RSA => {
+            proto::KeyType::Rsa => {
                 tracing::debug!("support for RSA was disabled at compile-time");
                 Err(DecodingError::missing_feature("rsa"))
             }
             #[cfg(feature = "secp256k1")]
-            proto::KeyType::Secp256k1 => Ok(secp256k1::PublicKey::try_from_bytes(&pubkey.Data)
+            proto::KeyType::Secp256k1 => Ok(secp256k1::PublicKey::try_from_bytes(&pubkey.data)
                 .map(|kp| PublicKey {
                     publickey: PublicKeyInner::Secp256k1(kp),
                 })?),
@@ -833,13 +821,13 @@ impl TryFrom<proto::PublicKey> for PublicKey {
                 Err(DecodingError::missing_feature("secp256k1"))
             }
             #[cfg(feature = "ecdsa")]
-            proto::KeyType::ECDSA => Ok(ecdsa::PublicKey::try_decode_der(&pubkey.Data).map(
+            proto::KeyType::Ecdsa => Ok(ecdsa::PublicKey::try_decode_der(&pubkey.data).map(
                 |kp| PublicKey {
                     publickey: PublicKeyInner::Ecdsa(kp),
                 },
             )?),
             #[cfg(not(feature = "ecdsa"))]
-            proto::KeyType::ECDSA => {
+            proto::KeyType::Ecdsa => {
                 tracing::debug!("support for ECDSA was disabled at compile-time");
                 Err(DecodingError::missing_feature("ecdsa"))
             }
