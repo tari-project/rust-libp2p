@@ -269,7 +269,7 @@ impl Keypair {
                 },
                 #[cfg(feature = "sr25519")]
                 KeyPairInner::Sr25519(ref data) => proto::PrivateKey {
-                    r#type: proto::KeyType::Sr25519,
+                    r#type: proto::KeyType::Sr25519 as i32,
                     data: data.to_bytes().to_vec(),
                 },
                 #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
@@ -321,7 +321,7 @@ impl Keypair {
             match key_type {
                 proto::KeyType::Sr25519 => {
                     #[cfg(feature = "sr25519")]
-                    return sr25519::Keypair::try_from_bytes(&mut private_key.Data).map(|sk| {
+                    return sr25519::Keypair::try_from_bytes(&mut private_key.data).map(|sk| {
                         Keypair {
                             keypair: KeyPairInner::Sr25519(sk),
                         }
@@ -776,7 +776,7 @@ impl TryFrom<proto::PublicKey> for PublicKey {
 
         match key_type {
             #[cfg(feature = "sr25519")]
-            proto::KeyType::Sr25519 => Ok(sr25519::PublicKey::try_from_bytes(&pubkey.Data).map(
+            proto::KeyType::Sr25519 => Ok(sr25519::PublicKey::try_from_bytes(&pubkey.data).map(
                 |kp| PublicKey {
                     publickey: PublicKeyInner::Sr25519(kp),
                 },

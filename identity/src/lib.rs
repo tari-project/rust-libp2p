@@ -92,8 +92,8 @@ impl From<&PublicKey> for proto::PublicKey {
         match &key.publickey {
             #[cfg(feature = "sr25519")]
             keypair::PublicKeyInner::Sr25519(key) => proto::PublicKey {
-                Type: proto::KeyType::Sr25519,
-                Data: key.to_bytes().to_vec(),
+                r#type: proto::KeyType::Sr25519 as i32,
+                data: key.to_bytes().to_vec(),
             },
             #[cfg(feature = "ed25519")]
             keypair::PublicKeyInner::Ed25519(key) => proto::PublicKey {
