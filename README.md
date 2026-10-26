@@ -10,17 +10,20 @@ This repository is the central place for Rust development of the [libp2p](https:
 
 ## Tari fork
 
-This is a fork of upstream `libp2p/rust-libp2p`. It cannot be contributed upstream because it adds
-a Tari-specific key type. All deviations from upstream `master` are listed here; keep this list up
-to date so future merges from upstream stay tractable.
+This is a fork of upstream `libp2p/rust-libp2p`. All deviations from upstream `master` are listed
+here; keep this list up to date so future merges from upstream stay tractable. The sr25519 key type
+is maintained upstream-shaped on the `sr25519` branch; a key type needs a libp2p specs change before
+upstream can take it.
 
-- **sr25519 (Ristretto/Schnorr) identity support**, backed by [`tari_crypto`]:
+- **sr25519 identity support**, schnorrkel-compatible under the `libp2p` signing context, built on
+  `curve25519-dalek` and `merlin`:
   - `identity/src/sr25519.rs` — new module.
   - `identity/src/keypair.rs`, `identity/src/lib.rs`, `identity/src/error.rs` — `Sr25519` variants
     and encode/decode wiring.
   - `identity/src/generated/keys.proto` — new `Sr25519 = 4` `KeyType`
     (`keys_proto.rs` is regenerated with `cargo run -p gen-proto`).
-  - `identity/Cargo.toml` — optional `tari_crypto` dependency and `sr25519` feature.
+  - `identity/Cargo.toml` — optional `curve25519-dalek` and `merlin` dependencies, `sr25519`
+    feature, and `schnorrkel` as a dev-dependency for interop tests.
   - `libp2p/Cargo.toml` — `sr25519` feature; `serde` additionally enables `libp2p-identity/serde`.
 - **`multiaddr` vendored into this repo** (`multiaddr/`) to avoid dependency issues. It is an
   unmodified copy of the crates.io release upstream `master` depends on (currently `0.19.0`), with
@@ -31,8 +34,6 @@ to date so future merges from upstream stay tractable.
   - `libp2p-identity` and `multiaddr` are path dependencies rather than crates.io ones.
   - `wasm-bindgen-futures` is left unpinned (upstream pins it to `=0.4.58`).
 - `.gitignore` — ignore `.idea/`.
-
-[`tari_crypto`]: https://crates.io/crates/tari-crypto
 
 ## Getting started
 
