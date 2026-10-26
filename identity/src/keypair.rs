@@ -54,15 +54,12 @@ use crate::error::OtherVariantError;
     feature = "rsa"
 ))]
 use crate::proto;
-#[cfg(feature = "sr25519")]
-use crate::sr25519;
-#[cfg(feature = "sr25519")]
-use tari_crypto::ristretto::RistrettoPublicKey;
-
 #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
 use crate::rsa;
 #[cfg(feature = "secp256k1")]
 use crate::secp256k1;
+#[cfg(feature = "sr25519")]
+use crate::sr25519;
 use crate::{
     KeyType,
     error::{DecodingError, SigningError},
@@ -230,7 +227,7 @@ impl Keypair {
         match self.keypair {
             #[cfg(feature = "sr25519")]
             KeyPairInner::Sr25519(ref pair) => PublicKey {
-                publickey: PublicKeyInner::Sr25519(pair.public().clone()),
+                publickey: PublicKeyInner::Sr25519(pair.public()),
             },
             #[cfg(feature = "ed25519")]
             KeyPairInner::Ed25519(ref pair) => PublicKey {
@@ -673,14 +670,6 @@ impl PublicKey {
     #[cfg(feature = "ecdsa")]
     pub fn try_into_ecdsa(self) -> Result<ecdsa::PublicKey, OtherVariantError> {
         self.try_into()
-    }
-
-    #[cfg(feature = "sr25519")]
-    pub fn is_eq_sr25519(&self, other: &RistrettoPublicKey) -> bool {
-        match &self.publickey {
-            PublicKeyInner::Sr25519(key) => key.inner_key() == other,
-            _ => false,
-        }
     }
 
     /// Encode the public key into a protobuf structure for storage or
