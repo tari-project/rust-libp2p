@@ -439,7 +439,7 @@ mod tests {
         let pk = Keypair::from(SecretKey::try_from_bytes([1u8; 32]).unwrap()).public();
         let encoded = crate::PublicKey::from(pk.clone()).encode_protobuf();
 
-        assert_eq!(&encoded[..4], &[0x08, 0x04, 0x12, 0x20]);
+        assert_eq!(&encoded[..4], &[0x08, 0x05, 0x12, 0x20]);
         assert_eq!(&encoded[4..], &pk.to_bytes());
         assert_eq!(
             crate::PublicKey::try_decode_protobuf(&encoded)

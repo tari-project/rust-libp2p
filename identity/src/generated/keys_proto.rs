@@ -20,7 +20,7 @@ pub enum KeyType {
     Ed25519 = 1,
     Secp256k1 = 2,
     Ecdsa = 3,
-    Sr25519 = 4,
+    Sr25519 = 5,
 }
 impl KeyType {
     /// String value of the enum field names used in the ProtoBuf definition.

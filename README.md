@@ -20,7 +20,7 @@ upstream can take it.
   - `identity/src/sr25519.rs` — new module.
   - `identity/src/keypair.rs`, `identity/src/lib.rs`, `identity/src/error.rs` — `Sr25519` variants
     and encode/decode wiring.
-  - `identity/src/generated/keys.proto` — new `Sr25519 = 4` `KeyType`
+  - `identity/src/generated/keys.proto` — new `Sr25519 = 5` `KeyType` (4 is proposed for ML-DSA in libp2p/specs#710)
     (`keys_proto.rs` is regenerated with `cargo run -p gen-proto`).
   - `identity/Cargo.toml` — optional `curve25519-dalek` and `merlin` dependencies, `sr25519`
     feature, and `schnorrkel` as a dev-dependency for interop tests.
